@@ -1,9 +1,9 @@
 {
-	"id": "nobsidion",
-	"name": "Nobsidion",
-	"version": "1.0.0",
+	"id": "nobsidian",
+	"name": "nObsidian",
+	"version": "1.0.1",
 	"minAppVersion": "0.15.0",
-	"description": "",
+	"description": "Sync your Obsidian notes to Notion pages, converting wiki-links along the way.",
 	"author": "Quan Phan",
 	"authorUrl": "https://github.com/quanphan2906",
 	"isDesktopOnly": false

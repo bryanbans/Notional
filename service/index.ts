@@ -1,5 +1,5 @@
 import { TFile } from "obsidian";
-import Nobsidion from "main";
+import NObsidian from "main";
 import { MarkdownWithFrontMatter, ServiceResult } from "./types";
 import notion from "./notion";
 import {
@@ -10,19 +10,19 @@ import {
 } from "./utils";
 
 export const uploadFile = async (
-	nobsidion: Nobsidion,
+	plugin: NObsidian,
 	file: TFile
 ): Promise<ServiceResult> => {
-	const contentWithFrontMatter = await initializeNotionPage(nobsidion, file);
+	const contentWithFrontMatter = await initializeNotionPage(plugin, file);
 
 	const content = await convertObsidianLinks(
-		nobsidion,
+		plugin,
 		contentWithFrontMatter.__content
 	);
 
 	if (contentWithFrontMatter.notionPageId) {
 		const uploadResult = await notion.uploadFileContent(
-			nobsidion.settings,
+			plugin.settings,
 			contentWithFrontMatter.notionPageId,
 			content
 		);
@@ -34,18 +34,15 @@ export const uploadFile = async (
 };
 
 export const initializeNotionPage = async (
-	nobsidion: Nobsidion,
+	plugin: NObsidian,
 	file: TFile
 ): Promise<MarkdownWithFrontMatter> => {
-	const contentWithFrontMatter = await nobsidion.getContent(file);
-	const settings = nobsidion.settings;
+	const contentWithFrontMatter = await plugin.getContent(file);
+	const settings = plugin.settings;
 	const notionWorkspaceID = settings.notionWorkspaceID;
 
-	console.log(file.basename);
-	console.log(contentWithFrontMatter);
-
 	if (!contentWithFrontMatter.notionPageId) {
-		const { data, error } = await notion.createEmptyPage(
+		const { data } = await notion.createEmptyPage(
 			settings,
 			file.basename
 		);
@@ -63,7 +60,7 @@ export const initializeNotionPage = async (
 			contentWithFrontMatter
 		);
 
-		nobsidion.updateMarkdownFile(file, processedMarkdown);
+		plugin.updateMarkdownFile(file, processedMarkdown);
 	}
 
 	return contentWithFrontMatter;
@@ -82,7 +79,7 @@ export const initializeNotionPage = async (
  * @returns Same markdown content, with wiki-link turned into hyperlink.
  */
 export const convertObsidianLinks = async (
-	nobsidion: Nobsidion,
+	plugin: NObsidian,
 	markdown: string
 ): Promise<string> => {
 	const links = getWikiLinkFromMarkdown(markdown);
@@ -91,18 +88,18 @@ export const convertObsidianLinks = async (
 	for (const pageName of links) {
 		let file: TFile | undefined;
 
-		if (nobsidion.fileNameToFile.has(pageName)) {
-			file = nobsidion.fileNameToFile.get(pageName);
+		if (plugin.fileNameToFile.has(pageName)) {
+			file = plugin.fileNameToFile.get(pageName);
 		}
 
 		// if file doesn't exist, create it
-		if (!file) file = await nobsidion.createEmptyMarkdownFile(pageName);
+		if (!file) file = await plugin.createEmptyMarkdownFile(pageName);
 		if (!file) continue;
 
 		// If file exists but doesn't have a corresponding notion page
 		// create an empty notion page
 		const contentWithFrontMatter = await initializeNotionPage(
-			nobsidion,
+			plugin,
 			file
 		);
 		const notionPageUrl = contentWithFrontMatter.notionPageUrl;

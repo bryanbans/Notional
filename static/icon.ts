@@ -2,7 +2,7 @@
     Originally created by EasyChris (2022)
     Modified by Quan Phan (2023)
 
-    This file is part of Nobsidion and is licensed under the GNU General Public License v3.0.
+    This file is part of nObsidian and is licensed under the GNU General Public License v3.0.
     Modifications include <brief description of modifications>.
 
     This program is free software: you can redistribute it and/or modify

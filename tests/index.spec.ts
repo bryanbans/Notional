@@ -1,36 +1,52 @@
 jest.mock("obsidian");
 jest.mock("../service/notion");
 
-import {
-	// uploadFile,
-	initializeNotionPage,
-	// convertObsidianLinks,
-} from "../service/index";
+import { initializeNotionPage } from "../service/index";
+import notion from "../service/notion";
 
-import Nobsidion from "main";
+import NObsidian from "main";
 import { TFile, App, PluginManifest } from "obsidian";
 
-// The line belows allow me to access and mock other functions in service/index while
-// I am testing one function. Don't delete it.
-// import * as service from "../service/index";
-
-describe("uploadFile", () => {
-	let nobsidionMock: Nobsidion; // can I just use Nobsidion type here?
+describe("initializeNotionPage", () => {
+	let pluginMock: NObsidian;
 	let fileMock: TFile;
 
 	beforeEach(() => {
 		jest.clearAllMocks();
-		nobsidionMock = new Nobsidion(new App(), {} as PluginManifest);
+		pluginMock = new NObsidian(new App(), {} as PluginManifest);
 		fileMock = new TFile();
+		fileMock.basename = "Some note";
 	});
 
-	it("test initializeNotionPage using file with notionPageId", async () => {
-		await initializeNotionPage(
-			nobsidionMock as unknown as Nobsidion,
-			fileMock
-		);
+	it("does not create a Notion page when the note already has a notionPageId", async () => {
+		// The default getContent mock returns a note that already has
+		// notionPageId "12345", so no new page should be created.
+		const result = await initializeNotionPage(pluginMock, fileMock);
 
-		expect(nobsidionMock.getContent).toHaveBeenCalled();
-		expect(fileMock.basename).toBe("New document");
+		expect(pluginMock.getContent).toHaveBeenCalledWith(fileMock);
+		expect(notion.createEmptyPage).not.toHaveBeenCalled();
+		expect(result.notionPageId).toBe("12345");
+	});
+
+	it("creates a Notion page and writes back front matter when notionPageId is missing", async () => {
+		(pluginMock.getContent as jest.Mock).mockResolvedValueOnce({
+			__content: "Body without front matter.",
+		});
+		(notion.createEmptyPage as jest.Mock).mockResolvedValueOnce({
+			data: {
+				id: "new-page-id",
+				url: "https://www.notion.so/new-page-id",
+			},
+			error: null,
+		});
+
+		const result = await initializeNotionPage(pluginMock, fileMock);
+
+		expect(notion.createEmptyPage).toHaveBeenCalledWith(
+			pluginMock.settings,
+			fileMock.basename
+		);
+		expect(result.notionPageId).toBe("new-page-id");
+		expect(pluginMock.updateMarkdownFile).toHaveBeenCalled();
 	});
 });

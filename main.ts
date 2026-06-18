@@ -2,7 +2,7 @@
     Originally created by EasyChris (2022)
     Modified by Quan Phan (2023)
 
-    This file is part of Nobsidion and is licensed under the GNU General Public License v3.0.
+    This file is part of nObsidian and is licensed under the GNU General Public License v3.0.
     Modifications include <brief description of modifications>.
 
     This program is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ import {
 	MarkdownWithFrontMatter,
 	ServiceResult,
 } from "service/types";
-import { NobsidionSettingTab } from "settingTab";
+import { NObsidianSettingTab } from "settingTab";
 import { NoticeMessageConfig, getBasenameFromPath } from "service/utils";
 import { uploadFile } from "service";
 
@@ -39,7 +39,7 @@ const DEFAULT_SETTINGS: PluginSettings = {
 	allowTags: false,
 };
 
-export default class Nobsidion extends Plugin {
+export default class NObsidian extends Plugin {
 	settings: PluginSettings;
 	message: { [key: string]: string };
 	fileNameToFile: Map<string, TFile>;
@@ -74,7 +74,7 @@ export default class Nobsidion extends Plugin {
 		this.registerCustomEvents();
 
 		// Add settings tab to plugin
-		this.addSettingTab(new NobsidionSettingTab(this.app, this));
+		this.addSettingTab(new NObsidianSettingTab(this.app, this));
 	}
 
 	async saveSettings() {

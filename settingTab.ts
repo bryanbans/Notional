@@ -1,8 +1,8 @@
 /*
     Originally created by EasyChris (2022) in main.ts
-    Extracted to nobsidionSettingTab.ts and modified by Quan Phan (2023)
+    Extracted to settingTab.ts and modified by Quan Phan (2023)
 
-    This file is part of Nobsidion and is licensed under the GNU General Public License v3.0.
+    This file is part of nObsidian and is licensed under the GNU General Public License v3.0.
     Modifications include <brief description of modifications>.
 
     This program is free software: you can redistribute it and/or modify
@@ -20,13 +20,13 @@
 */
 
 import { PluginSettingTab, Setting, App } from "obsidian";
-import Nobsidion from "main";
+import NObsidian from "main";
 import { PluginSettings, StringKeys, BooleanKeys } from "./service/types";
 
-export class NobsidionSettingTab extends PluginSettingTab {
-	plugin: Nobsidion;
+export class NObsidianSettingTab extends PluginSettingTab {
+	plugin: NObsidian;
 
-	constructor(app: App, plugin: Nobsidion) {
+	constructor(app: App, plugin: NObsidian) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -36,7 +36,7 @@ export class NobsidionSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 		containerEl.createEl("h2", {
-			text: "Settings for Obsidian to Notion plugin.",
+			text: "nObsidian settings.",
 		});
 
 		this.createTextSetting(containerEl, {

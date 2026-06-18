@@ -2,7 +2,7 @@ import { TFile, App, PluginManifest } from "obsidian";
 import { PluginSettings } from "../service/types";
 import { NoticeMessageConfig } from "../service/utils";
 
-class Nobsidion {
+class NObsidian {
 	settings: PluginSettings;
 	message: { [key: string]: string };
 	fileNameToFile: Map<string, TFile>;
@@ -34,4 +34,4 @@ class Nobsidion {
 	updateMarkdownFile = jest.fn();
 }
 
-export default Nobsidion;
+export default NObsidian;

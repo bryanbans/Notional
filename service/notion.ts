@@ -2,7 +2,7 @@
     Originally created by EasyChris (2022) as Upload2Notion.ts
     Renamed and modified by Quan Phan (2023)
 
-    This file is part of Nobsidion and is licensed under the GNU General Public License v3.0.
+    This file is part of nObsidian and is licensed under the GNU General Public License v3.0.
     Modifications include <brief description of modifications>.
 
     This program is free software: you can redistribute it and/or modify
@@ -22,6 +22,10 @@
 import { requestUrl } from "obsidian";
 import { markdownToBlocks } from "@tryfabric/martian";
 import { PluginSettings, ServiceResult } from "./types";
+
+// Notion requires every request to pin an API version. Keep this current with
+// the latest stable release: https://developers.notion.com/reference/versioning
+const NOTION_VERSION = "2022-06-28";
 
 const createEmptyPage = async (
 	settings: PluginSettings,
@@ -59,7 +63,7 @@ const createEmptyPage = async (
 			headers: {
 				"Content-Type": "application/json",
 				Authorization: `Bearer ${notionAPIToken}`,
-				"Notion-Version": "2021-08-16",
+				"Notion-Version": NOTION_VERSION,
 			},
 			body: JSON.stringify(bodyString),
 		});
@@ -82,7 +86,6 @@ const addContentToPage = async (
 	const notionAPIToken = settings.notionAPIToken;
 
 	const blocks = markdownToBlocks(content);
-	console.log(blocks);
 
 	try {
 		res = await requestUrl({
@@ -91,7 +94,7 @@ const addContentToPage = async (
 			headers: {
 				"Content-Type": "application/json",
 				Authorization: `Bearer ${notionAPIToken}`,
-				"Notion-Version": "2021-08-16",
+				"Notion-Version": NOTION_VERSION,
 			},
 			body: JSON.stringify({ children: blocks }),
 		});
@@ -99,9 +102,7 @@ const addContentToPage = async (
 	} catch (error) {
 		return {
 			data: res,
-			error: Error(
-				`Error adding content to Notion page: ${error.message}`
-			),
+			error: Error(`Error adding content to Notion page: ${error}`),
 		};
 	}
 };
@@ -119,7 +120,7 @@ const clearPageContent = async (
 			method: "GET",
 			headers: {
 				Authorization: `Bearer ${notionAPIToken}`,
-				"Notion-Version": "2021-08-16",
+				"Notion-Version": NOTION_VERSION,
 			},
 		});
 
@@ -132,7 +133,7 @@ const clearPageContent = async (
 					method: "DELETE",
 					headers: {
 						Authorization: `Bearer ${notionAPIToken}`,
-						"Notion-Version": "2021-08-16",
+						"Notion-Version": NOTION_VERSION,
 					},
 				});
 			}

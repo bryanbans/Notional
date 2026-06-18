@@ -1,6 +1,6 @@
-# Nobsidion
+# nObsidian
 
-Nobsidion is an Obsidian plugin designed to sync your Obsidian vault with your Notion workspace. Building upon the [Obsidian to Notion](https://github.com/EasyChris/obsidian-to-notion/) plugin, Nobsidion offers additional functionality and refinements, making the syncing process more seamless and integrated.
+nObsidian is an Obsidian plugin designed to sync your Obsidian vault with your Notion workspace. Building upon the [Obsidian to Notion](https://github.com/EasyChris/obsidian-to-notion/) plugin, nObsidian offers additional functionality and refinements, making the syncing process more seamless and integrated.
 
 ## Vision
 
@@ -56,4 +56,4 @@ Contributions are welcome! If you have a suggestion, bug report, or feature requ
 
 ## License
 
-Nobsidion is released under the [GNU GENERAL PUBLIC LICENSE 2007](LICENSE).
+nObsidian is released under the [GNU GENERAL PUBLIC LICENSE 2007](LICENSE).
