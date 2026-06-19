@@ -1,7 +1,7 @@
 jest.mock("obsidian");
 jest.mock("../service/notion");
 
-import { initializeNotionPage } from "../service/index";
+import { initializeNotionPage, runWithConcurrency } from "../service/index";
 import notion from "../service/notion";
 
 import NObsidian from "main";
@@ -48,5 +48,57 @@ describe("initializeNotionPage", () => {
 		);
 		expect(result.notionPageId).toBe("new-page-id");
 		expect(pluginMock.updateMarkdownFile).toHaveBeenCalled();
+	});
+
+	it("shares in-flight initialization for the same file", async () => {
+		(pluginMock.getContent as jest.Mock).mockResolvedValue({
+			__content: "Body without front matter.",
+		});
+		(notion.createEmptyPage as jest.Mock).mockResolvedValue({
+			data: {
+				id: "shared-page-id",
+				url: "https://www.notion.so/shared-page-id",
+			},
+			error: null,
+		});
+
+		const results = await Promise.all([
+			initializeNotionPage(pluginMock, fileMock),
+			initializeNotionPage(pluginMock, fileMock),
+		]);
+
+		expect(pluginMock.getContent).toHaveBeenCalledTimes(1);
+		expect(notion.createEmptyPage).toHaveBeenCalledTimes(1);
+		expect(pluginMock.updateMarkdownFile).toHaveBeenCalledTimes(1);
+		expect(results[0].notionPageId).toBe("shared-page-id");
+		expect(results[1].notionPageId).toBe("shared-page-id");
+	});
+});
+
+describe("runWithConcurrency", () => {
+	it("caps active workers and preserves result order", async () => {
+		let activeWorkers = 0;
+		let maxActiveWorkers = 0;
+
+		const results = await runWithConcurrency(
+			[1, 2, 3, 4, 5],
+			2,
+			async (item) => {
+				activeWorkers += 1;
+				maxActiveWorkers = Math.max(maxActiveWorkers, activeWorkers);
+				await Promise.resolve();
+				activeWorkers -= 1;
+				return item * 2;
+			}
+		);
+
+		expect(maxActiveWorkers).toBeLessThanOrEqual(2);
+		expect(results).toEqual([2, 4, 6, 8, 10]);
+	});
+
+	it("rejects invalid concurrency values", async () => {
+		await expect(
+			runWithConcurrency([1], 0, async (item) => item)
+		).rejects.toThrow("Concurrency must be a positive integer");
 	});
 });

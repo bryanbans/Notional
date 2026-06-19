@@ -25,10 +25,11 @@ import {
 	PluginSettings,
 	MarkdownWithFrontMatter,
 	ServiceResult,
+	BulkUploadFileResult,
 } from "service/types";
 import { NObsidianSettingTab } from "settingTab";
 import { NoticeMessageConfig, getBasenameFromPath } from "service/utils";
-import { uploadFile } from "service";
+import { runWithConcurrency, uploadFile } from "service";
 
 // Define your default settings
 const DEFAULT_SETTINGS: PluginSettings = {
@@ -38,6 +39,8 @@ const DEFAULT_SETTINGS: PluginSettings = {
 	notionWorkspaceID: "",
 	allowTags: false,
 };
+
+const BULK_UPLOAD_CONCURRENCY = 3;
 
 export default class NObsidian extends Plugin {
 	settings: PluginSettings;
@@ -149,8 +152,36 @@ export default class NObsidian extends Plugin {
 		}
 
 		const markdownFiles = this.app.vault.getMarkdownFiles();
-		for (const file of markdownFiles) {
-			await this.uploadFile(file);
+		const results = await runWithConcurrency(
+			markdownFiles,
+			BULK_UPLOAD_CONCURRENCY,
+			async (file): Promise<BulkUploadFileResult> => {
+				try {
+					const uploadResult = await this.uploadFile(file);
+					return {
+						fileName: file.basename,
+						error: uploadResult.error,
+					};
+				} catch (error) {
+					const uploadError =
+						error instanceof Error ? error : Error(String(error));
+					this.displayResult(
+						{ data: null, error: uploadError },
+						file.basename
+					);
+					return { fileName: file.basename, error: uploadError };
+				}
+			}
+		);
+		const failedUploads = results.filter((result) => result.error);
+
+		if (failedUploads.length > 0) {
+			const succeededUploads = results.length - failedUploads.length;
+			new Notice(
+				`Vault sync finished: ${succeededUploads}/${results.length} notes uploaded. ${failedUploads.length} failed.`,
+				5000
+			);
+			return;
 		}
 
 		new Notice(this.message["all-sync-success"]);
@@ -161,9 +192,10 @@ export default class NObsidian extends Plugin {
 		return notionAPIToken !== "" && databaseID !== "";
 	}
 
-	async uploadFile(file: TFile): Promise<void> {
+	async uploadFile(file: TFile): Promise<ServiceResult> {
 		const uploadResult = await uploadFile(this, file);
 		this.displayResult(uploadResult, file.basename);
+		return uploadResult;
 	}
 
 	async getContent(file: TFile): Promise<MarkdownWithFrontMatter> {

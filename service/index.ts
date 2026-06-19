@@ -33,7 +33,35 @@ export const uploadFile = async (
 	return { data: null, error: Error("Something happened") };
 };
 
+const inFlightPageInitializations = new WeakMap<
+	NObsidian,
+	Map<string, Promise<MarkdownWithFrontMatter>>
+>();
+
 export const initializeNotionPage = async (
+	plugin: NObsidian,
+	file: TFile
+): Promise<MarkdownWithFrontMatter> => {
+	let pluginInitializations = inFlightPageInitializations.get(plugin);
+	if (!pluginInitializations) {
+		pluginInitializations = new Map();
+		inFlightPageInitializations.set(plugin, pluginInitializations);
+	}
+
+	const existingInitialization = pluginInitializations.get(file.basename);
+	if (existingInitialization) return existingInitialization;
+
+	const initialization = initializeNotionPageContent(plugin, file).finally(
+		() => {
+			pluginInitializations.delete(file.basename);
+		}
+	);
+	pluginInitializations.set(file.basename, initialization);
+
+	return initialization;
+};
+
+const initializeNotionPageContent = async (
 	plugin: NObsidian,
 	file: TFile
 ): Promise<MarkdownWithFrontMatter> => {
@@ -64,6 +92,35 @@ export const initializeNotionPage = async (
 	}
 
 	return contentWithFrontMatter;
+};
+
+export const runWithConcurrency = async <T, R>(
+	items: T[],
+	concurrency: number,
+	worker: (item: T, index: number) => Promise<R>
+): Promise<R[]> => {
+	if (!Number.isInteger(concurrency) || concurrency < 1) {
+		throw Error("Concurrency must be a positive integer");
+	}
+
+	const results: R[] = new Array(items.length);
+	let nextIndex = 0;
+
+	const runWorker = async () => {
+		while (nextIndex < items.length) {
+			const index = nextIndex;
+			nextIndex += 1;
+			results[index] = await worker(items[index], index);
+		}
+	};
+
+	const workers = Array.from(
+		{ length: Math.min(concurrency, items.length) },
+		() => runWorker()
+	);
+	await Promise.all(workers);
+
+	return results;
 };
 
 /**

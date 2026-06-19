@@ -48,3 +48,8 @@ export type ServiceResult = {
 	data: any;
 	error: Error | null;
 };
+
+export type BulkUploadFileResult = {
+	fileName: string;
+	error: Error | null;
+};
