@@ -29,7 +29,12 @@ import {
 } from "service/types";
 import { NObsidianSettingTab } from "settingTab";
 import { NoticeMessageConfig, getBasenameFromPath } from "service/utils";
-import { runWithConcurrency, uploadFile } from "service";
+import {
+	pullFileFromNotion,
+	runWithConcurrency,
+	syncFile,
+	uploadFile,
+} from "service";
 
 // Define your default settings
 const DEFAULT_SETTINGS: PluginSettings = {
@@ -38,6 +43,7 @@ const DEFAULT_SETTINGS: PluginSettings = {
 	bannerUrl: "",
 	notionWorkspaceID: "",
 	allowTags: false,
+	bidirectionalSync: false,
 };
 
 const BULK_UPLOAD_CONCURRENCY = 3;
@@ -98,6 +104,22 @@ export default class NObsidian extends Plugin {
 			name: "Upload entire vault to Notion",
 			callback: async () => {
 				this.bulkUpload();
+			},
+		});
+
+		this.addCommand({
+			id: "pull-current-note-from-notion",
+			name: "Pull current note from Notion",
+			editorCallback: async () => {
+				this.pullCurrentNote();
+			},
+		});
+
+		this.addCommand({
+			id: "sync-current-note-with-notion",
+			name: "Sync current note with Notion",
+			editorCallback: async () => {
+				this.syncCurrentNote();
 			},
 		});
 	}
@@ -185,6 +207,38 @@ export default class NObsidian extends Plugin {
 		}
 
 		new Notice(this.message["all-sync-success"]);
+	}
+
+	async pullCurrentNote() {
+		if (!this.hasValidNotionCredentials()) {
+			new Notice(this.message["config-settings"]);
+			return;
+		}
+
+		const nowFile = this.app.workspace.getActiveFile();
+		if (!nowFile) {
+			new Notice(this.message["open-file"]);
+			return null;
+		}
+
+		const pullResult = await pullFileFromNotion(this, nowFile);
+		this.displayResult(pullResult, nowFile.basename);
+	}
+
+	async syncCurrentNote() {
+		if (!this.hasValidNotionCredentials()) {
+			new Notice(this.message["config-settings"]);
+			return;
+		}
+
+		const nowFile = this.app.workspace.getActiveFile();
+		if (!nowFile) {
+			new Notice(this.message["open-file"]);
+			return null;
+		}
+
+		const syncResult = await syncFile(this, nowFile);
+		this.displayResult(syncResult, nowFile.basename);
 	}
 
 	hasValidNotionCredentials() {

@@ -76,6 +76,12 @@ export class NObsidianSettingTab extends PluginSettingTab {
 			desc: "Transfer Obsidian tags to the Notion table. Requires a 'Tags' column in Notion.",
 			settingKey: "allowTags",
 		});
+
+		this.createToggleSetting(containerEl, {
+			name: "Bidirectional sync (experimental)",
+			desc: "Enable Notion-to-Obsidian sync commands and timestamp-based conflict checks.",
+			settingKey: "bidirectionalSync",
+		});
 	}
 
 	createTextSetting(

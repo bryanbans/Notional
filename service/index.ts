@@ -5,7 +5,8 @@ import notion from "./notion";
 import {
 	updateNotionPageUrlWithWorkspaceId,
 	fromYamlFrontMatterToMarkdown,
-	getWikiLinkFromMarkdown,
+	createNotionPageMentionUrl,
+	getWikiLinksFromMarkdown,
 	replaceWikiWithHyperLink,
 } from "./utils";
 
@@ -26,6 +27,21 @@ export const uploadFile = async (
 			contentWithFrontMatter.notionPageId,
 			content
 		);
+
+		if (!uploadResult.error) {
+			const pageResult = await notion.retrievePage(
+				plugin.settings,
+				contentWithFrontMatter.notionPageId
+			);
+			if (pageResult.error) return pageResult;
+
+			await updateSyncMetadata(
+				plugin,
+				file,
+				contentWithFrontMatter,
+				pageResult.data
+			);
+		}
 
 		return uploadResult;
 	}
@@ -83,6 +99,9 @@ const initializeNotionPageContent = async (
 
 		contentWithFrontMatter.notionPageId = notionPageId;
 		contentWithFrontMatter.notionPageUrl = notionPageUrl;
+		contentWithFrontMatter.notionLastEditedTime = data.last_edited_time;
+		contentWithFrontMatter.obsidianLastSyncedAt =
+			new Date().toISOString();
 
 		const processedMarkdown = fromYamlFrontMatterToMarkdown(
 			contentWithFrontMatter
@@ -92,6 +111,133 @@ const initializeNotionPageContent = async (
 	}
 
 	return contentWithFrontMatter;
+};
+
+const updateSyncMetadata = async (
+	plugin: NObsidian,
+	file: TFile,
+	contentWithFrontMatter: MarkdownWithFrontMatter,
+	notionPage: any,
+	content = contentWithFrontMatter.__content
+) => {
+	const processedMarkdown = fromYamlFrontMatterToMarkdown({
+		...contentWithFrontMatter,
+		__content: content,
+		notionPageUrl:
+			notionPage.url || contentWithFrontMatter.notionPageUrl,
+		notionLastEditedTime:
+			notionPage.last_edited_time ||
+			contentWithFrontMatter.notionLastEditedTime,
+		obsidianLastSyncedAt: new Date().toISOString(),
+	});
+
+	await plugin.updateMarkdownFile(file, processedMarkdown);
+};
+
+const isAfter = (current?: string, previous?: string): boolean => {
+	if (!current || !previous) return Boolean(current);
+	return Date.parse(current) > Date.parse(previous);
+};
+
+const hasLocalChangesSinceLastSync = (
+	file: TFile,
+	contentWithFrontMatter: MarkdownWithFrontMatter
+): boolean => {
+	const lastSyncedAt = contentWithFrontMatter.obsidianLastSyncedAt;
+	if (!lastSyncedAt || !file.stat?.mtime) return false;
+
+	return file.stat.mtime > Date.parse(lastSyncedAt) + 1000;
+};
+
+const hasNotionChangesSinceLastSync = (
+	contentWithFrontMatter: MarkdownWithFrontMatter,
+	notionPage: any
+): boolean => {
+	return isAfter(
+		notionPage.last_edited_time,
+		contentWithFrontMatter.notionLastEditedTime
+	);
+};
+
+export const pullFileFromNotion = async (
+	plugin: NObsidian,
+	file: TFile
+): Promise<ServiceResult> => {
+	const contentWithFrontMatter = await plugin.getContent(file);
+	const notionPageId = contentWithFrontMatter.notionPageId;
+
+	if (!notionPageId) {
+		return {
+			data: null,
+			error: Error("Missing notionPageId for "),
+		};
+	}
+
+	const notionPageResult = await notion.retrievePageMarkdown(
+		plugin.settings,
+		notionPageId
+	);
+	if (notionPageResult.error) return notionPageResult;
+
+	const { page, markdown } = notionPageResult.data;
+	const hasRemoteChanges = hasNotionChangesSinceLastSync(
+		contentWithFrontMatter,
+		page
+	);
+	const hasLocalChanges = hasLocalChangesSinceLastSync(
+		file,
+		contentWithFrontMatter
+	);
+
+	if (hasRemoteChanges && hasLocalChanges) {
+		return {
+			data: null,
+			error: Error("Sync conflict: both Obsidian and Notion changed "),
+		};
+	}
+
+	await updateSyncMetadata(
+		plugin,
+		file,
+		contentWithFrontMatter,
+		page,
+		markdown
+	);
+
+	return { data: notionPageResult.data, error: null };
+};
+
+export const syncFile = async (
+	plugin: NObsidian,
+	file: TFile
+): Promise<ServiceResult> => {
+	const contentWithFrontMatter = await plugin.getContent(file);
+	const notionPageId = contentWithFrontMatter.notionPageId;
+
+	if (!notionPageId) return uploadFile(plugin, file);
+
+	const pageResult = await notion.retrievePage(plugin.settings, notionPageId);
+	if (pageResult.error) return pageResult;
+
+	const hasRemoteChanges = hasNotionChangesSinceLastSync(
+		contentWithFrontMatter,
+		pageResult.data
+	);
+	const hasLocalChanges = hasLocalChangesSinceLastSync(
+		file,
+		contentWithFrontMatter
+	);
+
+	if (hasRemoteChanges && hasLocalChanges) {
+		return {
+			data: null,
+			error: Error("Sync conflict: both Obsidian and Notion changed "),
+		};
+	}
+
+	if (hasRemoteChanges) return pullFileFromNotion(plugin, file);
+
+	return uploadFile(plugin, file);
 };
 
 export const runWithConcurrency = async <T, R>(
@@ -124,33 +270,31 @@ export const runWithConcurrency = async <T, R>(
 };
 
 /**
- * Convert Obsidian wiki-link into hyperlink.
+ * Convert Obsidian wiki-link into a Notion page mention marker.
  *
- * The hyperlink will have the same name as the wiki-link, but it will link
- * to the corresponding Notion page.
- *
- * We parse wiki-link into hyperlink because Notion doesn't understand wiki-link
- * and we haven't built a parser from wiki-link to Notion internal page mention.
+ * The marker is emitted as a markdown link so Martian preserves it in rich text.
+ * service/notion.ts converts that marker into a Notion page mention before
+ * appending blocks.
  *
  * @param markdown Original markdown content of an Obsidian markdown file
- * @returns Same markdown content, with wiki-link turned into hyperlink.
+ * @returns Same markdown content, with wiki-link turned into mention markers.
  */
 export const convertObsidianLinks = async (
 	plugin: NObsidian,
 	markdown: string
 ): Promise<string> => {
-	const links = getWikiLinkFromMarkdown(markdown);
+	const links = getWikiLinksFromMarkdown(markdown);
 	let updatedMarkdown = markdown;
 
-	for (const pageName of links) {
+	for (const link of links) {
 		let file: TFile | undefined;
 
-		if (plugin.fileNameToFile.has(pageName)) {
-			file = plugin.fileNameToFile.get(pageName);
+		if (plugin.fileNameToFile.has(link.pageName)) {
+			file = plugin.fileNameToFile.get(link.pageName);
 		}
 
 		// if file doesn't exist, create it
-		if (!file) file = await plugin.createEmptyMarkdownFile(pageName);
+		if (!file) file = await plugin.createEmptyMarkdownFile(link.pageName);
 		if (!file) continue;
 
 		// If file exists but doesn't have a corresponding notion page
@@ -159,14 +303,14 @@ export const convertObsidianLinks = async (
 			plugin,
 			file
 		);
-		const notionPageUrl = contentWithFrontMatter.notionPageUrl;
+		const notionPageId = contentWithFrontMatter.notionPageId;
 
-		if (notionPageUrl)
+		if (notionPageId)
 			updatedMarkdown = replaceWikiWithHyperLink(
 				updatedMarkdown,
-				pageName,
-				pageName,
-				notionPageUrl
+				link.rawLink,
+				link.displayName,
+				createNotionPageMentionUrl(notionPageId)
 			);
 	}
 

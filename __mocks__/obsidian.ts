@@ -1,5 +1,8 @@
 export class TFile {
 	basename: string;
+	stat = {
+		mtime: 0,
+	};
 }
 
 export class App {}

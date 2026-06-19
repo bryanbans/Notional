@@ -14,6 +14,7 @@ class NObsidian {
 			bannerUrl: "",
 			notionWorkspaceID: "",
 			allowTags: false,
+			bidirectionalSync: false,
 		};
 		this.message = NoticeMessageConfig("en");
 		this.fileNameToFile = new Map<string, TFile>();

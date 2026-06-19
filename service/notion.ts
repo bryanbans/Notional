@@ -22,6 +22,7 @@
 import { requestUrl } from "obsidian";
 import { markdownToBlocks } from "@tryfabric/martian";
 import { PluginSettings, ServiceResult } from "./types";
+import { getNotionPageMentionId } from "./utils";
 
 // Notion requires every request to pin an API version. Keep this current with
 // the latest stable release: https://developers.notion.com/reference/versioning
@@ -31,6 +32,14 @@ const MAX_BLOCKS_PER_APPEND = 100;
 type NotionBlock = {
 	id?: string;
 	type?: string;
+	has_children?: boolean;
+	[key: string]: any;
+};
+
+type NotionPage = {
+	id: string;
+	url?: string;
+	last_edited_time?: string;
 	[key: string]: any;
 };
 
@@ -130,6 +139,202 @@ const appendBlocksRecursively = async (
 	return lastResponse;
 };
 
+const getAuthHeaders = (settings: PluginSettings) => ({
+	Authorization: `Bearer ${settings.notionAPIToken}`,
+	"Notion-Version": NOTION_VERSION,
+});
+
+const getJsonHeaders = (settings: PluginSettings) => ({
+	"Content-Type": "application/json",
+	...getAuthHeaders(settings),
+});
+
+const convertPageMentionLinks = (value: any): any => {
+	if (Array.isArray(value)) {
+		return value.map(convertPageMentionLinks);
+	}
+
+	if (!value || typeof value !== "object") return value;
+
+	const notionPageId = getNotionPageMentionId(value.text?.link?.url || "");
+	if (value.type === "text" && notionPageId) {
+		return {
+			type: "mention",
+			mention: {
+				type: "page",
+				page: {
+					id: notionPageId,
+				},
+			},
+			annotations: value.annotations,
+		};
+	}
+
+	const convertedValue = { ...value };
+	for (const key of Object.keys(convertedValue)) {
+		convertedValue[key] = convertPageMentionLinks(convertedValue[key]);
+	}
+
+	return convertedValue;
+};
+
+const richTextToMarkdown = (richText: any[] = []): string => {
+	return richText
+		.map((text) => {
+			const plainText = text.plain_text || text.text?.content || "";
+			if (text.href) return `[${plainText}](${text.href})`;
+			if (text.text?.link?.url) {
+				return `[${plainText}](${text.text.link.url})`;
+			}
+			return plainText;
+		})
+		.join("");
+};
+
+const indentMarkdown = (markdown: string): string => {
+	return markdown
+		.split("\n")
+		.map((line) => (line ? `\t${line}` : line))
+		.join("\n");
+};
+
+const blockToMarkdown = (block: NotionBlock): string => {
+	const children = getBlockChildren(block)
+		.map(blockToMarkdown)
+		.filter(Boolean)
+		.join("\n");
+	const nestedMarkdown = children ? `\n${indentMarkdown(children)}` : "";
+
+	switch (block.type) {
+		case "paragraph":
+			return `${richTextToMarkdown(block.paragraph?.rich_text)}${
+				children ? `\n${children}` : ""
+			}`.trim();
+		case "heading_1":
+			return `# ${richTextToMarkdown(block.heading_1?.rich_text)}`;
+		case "heading_2":
+			return `## ${richTextToMarkdown(block.heading_2?.rich_text)}`;
+		case "heading_3":
+			return `### ${richTextToMarkdown(block.heading_3?.rich_text)}`;
+		case "bulleted_list_item":
+			return `- ${richTextToMarkdown(
+				block.bulleted_list_item?.rich_text
+			)}${nestedMarkdown}`;
+		case "numbered_list_item":
+			return `1. ${richTextToMarkdown(
+				block.numbered_list_item?.rich_text
+			)}${nestedMarkdown}`;
+		case "to_do":
+			return `- [${block.to_do?.checked ? "x" : " "}] ${richTextToMarkdown(
+				block.to_do?.rich_text
+			)}${nestedMarkdown}`;
+		case "quote":
+			return `> ${richTextToMarkdown(block.quote?.rich_text)}${
+				children ? `\n${children}` : ""
+			}`;
+		case "code":
+			return `\`\`\`${block.code?.language || ""}\n${richTextToMarkdown(
+				block.code?.rich_text
+			)}\n\`\`\``;
+		case "divider":
+			return "---";
+		default:
+			return "";
+	}
+};
+
+const blocksToMarkdown = (blocks: NotionBlock[]): string => {
+	return blocks.map(blockToMarkdown).filter(Boolean).join("\n\n");
+};
+
+const retrievePage = async (
+	settings: PluginSettings,
+	notionPageId: string
+): Promise<ServiceResult> => {
+	let res = null;
+
+	try {
+		res = await requestUrl({
+			url: `https://api.notion.com/v1/pages/${notionPageId}`,
+			method: "GET",
+			headers: getAuthHeaders(settings),
+		});
+
+		return { data: res.json, error: null };
+	} catch (error) {
+		return {
+			data: res,
+			error: Error(`Error retrieving Notion page: ${error}`),
+		};
+	}
+};
+
+const retrieveBlockChildren = async (
+	settings: PluginSettings,
+	blockId: string
+): Promise<ServiceResult> => {
+	let res = null;
+	const blocks: NotionBlock[] = [];
+	let startCursor: string | null = null;
+
+	try {
+		do {
+			const cursorQuery = startCursor
+				? `?start_cursor=${encodeURIComponent(startCursor)}`
+				: "";
+			res = await requestUrl({
+				url: `https://api.notion.com/v1/blocks/${blockId}/children${cursorQuery}`,
+				method: "GET",
+				headers: getAuthHeaders(settings),
+			});
+
+			for (const block of res.json.results || []) {
+				if (block.has_children) {
+					const childrenResult = await retrieveBlockChildren(
+						settings,
+						block.id
+					);
+					if (childrenResult.error) return childrenResult;
+					const typedBlock = block[block.type] || {};
+					block[block.type] = {
+						...typedBlock,
+						children: childrenResult.data,
+					};
+				}
+				blocks.push(block);
+			}
+
+			startCursor = res.json.has_more ? res.json.next_cursor : null;
+		} while (startCursor);
+
+		return { data: blocks, error: null };
+	} catch (error) {
+		return {
+			data: res,
+			error: Error(`Error retrieving Notion block children: ${error}`),
+		};
+	}
+};
+
+const retrievePageMarkdown = async (
+	settings: PluginSettings,
+	notionPageId: string
+): Promise<ServiceResult> => {
+	const pageResult = await retrievePage(settings, notionPageId);
+	if (pageResult.error) return pageResult;
+
+	const childrenResult = await retrieveBlockChildren(settings, notionPageId);
+	if (childrenResult.error) return childrenResult;
+
+	return {
+		data: {
+			page: pageResult.data as NotionPage,
+			markdown: blocksToMarkdown(childrenResult.data),
+		},
+		error: null,
+	};
+};
+
 const createEmptyPage = async (
 	settings: PluginSettings,
 	title: string,
@@ -137,7 +342,7 @@ const createEmptyPage = async (
 ): Promise<ServiceResult> => {
 	let res = null;
 
-	const { databaseID, notionAPIToken, allowTags, bannerUrl } = settings;
+	const { databaseID, allowTags, bannerUrl } = settings;
 
 	const bodyString: any = {
 		parent: { database_id: databaseID },
@@ -164,9 +369,7 @@ const createEmptyPage = async (
 			url: `https://api.notion.com/v1/pages`,
 			method: "POST",
 			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${notionAPIToken}`,
-				"Notion-Version": NOTION_VERSION,
+				...getJsonHeaders(settings),
 			},
 			body: JSON.stringify(bodyString),
 		});
@@ -187,7 +390,7 @@ const addContentToPage = async (
 ): Promise<ServiceResult> => {
 	let res = null;
 
-	const blocks = markdownToBlocks(content);
+	const blocks = convertPageMentionLinks(markdownToBlocks(content));
 
 	try {
 		res = await appendBlocksRecursively(settings, notionPageId, blocks);
@@ -204,16 +407,13 @@ const clearPageContent = async (
 	settings: PluginSettings,
 	notionPageId: string
 ): Promise<ServiceResult> => {
-	const notionAPIToken = settings.notionAPIToken;
-
 	try {
 		// Retrieve the list of block children for the given page ID
 		const listResponse = await requestUrl({
 			url: `https://api.notion.com/v1/blocks/${notionPageId}/children`,
 			method: "GET",
 			headers: {
-				Authorization: `Bearer ${notionAPIToken}`,
-				"Notion-Version": NOTION_VERSION,
+				...getAuthHeaders(settings),
 			},
 		});
 
@@ -225,8 +425,7 @@ const clearPageContent = async (
 					url: `https://api.notion.com/v1/blocks/${block.id}`,
 					method: "DELETE",
 					headers: {
-						Authorization: `Bearer ${notionAPIToken}`,
-						"Notion-Version": NOTION_VERSION,
+						...getAuthHeaders(settings),
 					},
 				});
 			}
@@ -265,6 +464,8 @@ const uploadFileContent = async (
 
 const notion = {
 	createEmptyPage,
+	retrievePage,
+	retrievePageMarkdown,
 	uploadFileContent,
 };
 

@@ -24,6 +24,7 @@ export type PluginSettings = {
 	bannerUrl: string;
 	notionWorkspaceID: string;
 	allowTags: boolean;
+	bidirectionalSync: boolean;
 };
 
 export type StringKeys<T> = Exclude<
@@ -41,6 +42,8 @@ export type MarkdownWithFrontMatter = {
 	readonly __content: string;
 	notionPageId?: string;
 	notionPageUrl?: string;
+	notionLastEditedTime?: string;
+	obsidianLastSyncedAt?: string;
 	tags?: string[];
 };
 

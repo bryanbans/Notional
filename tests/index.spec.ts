@@ -1,7 +1,12 @@
 jest.mock("obsidian");
 jest.mock("../service/notion");
 
-import { initializeNotionPage, runWithConcurrency } from "../service/index";
+import {
+	convertObsidianLinks,
+	initializeNotionPage,
+	pullFileFromNotion,
+	runWithConcurrency,
+} from "../service/index";
 import notion from "../service/notion";
 
 import NObsidian from "main";
@@ -100,5 +105,103 @@ describe("runWithConcurrency", () => {
 		await expect(
 			runWithConcurrency([1], 0, async (item) => item)
 		).rejects.toThrow("Concurrency must be a positive integer");
+	});
+});
+
+describe("convertObsidianLinks", () => {
+	let pluginMock: NObsidian;
+	let fileMock: TFile;
+
+	beforeEach(() => {
+		jest.clearAllMocks();
+		pluginMock = new NObsidian(new App(), {} as PluginManifest);
+		fileMock = new TFile();
+		fileMock.basename = "Linked note";
+		pluginMock.fileNameToFile.set(fileMock.basename, fileMock);
+	});
+
+	it("converts wiki-links into Notion page mention markers", async () => {
+		const result = await convertObsidianLinks(
+			pluginMock,
+			"See [[Linked note|the linked note]]."
+		);
+
+		expect(result).toBe(
+			"See [the linked note](nobsidian://notion-page/12345)."
+		);
+		expect(pluginMock.createEmptyMarkdownFile).not.toHaveBeenCalled();
+	});
+});
+
+describe("pullFileFromNotion", () => {
+	let pluginMock: NObsidian;
+	let fileMock: TFile;
+
+	beforeEach(() => {
+		jest.clearAllMocks();
+		pluginMock = new NObsidian(new App(), {} as PluginManifest);
+		fileMock = new TFile();
+		fileMock.basename = "Synced note";
+		fileMock.stat.mtime = Date.parse("2024-01-01T00:00:00.000Z");
+	});
+
+	it("updates the note body and sync metadata from Notion", async () => {
+		(pluginMock.getContent as jest.Mock).mockResolvedValueOnce({
+			__content: "Local body",
+			notionPageId: "page-id",
+			notionPageUrl: "https://www.notion.so/page-id",
+			notionLastEditedTime: "2024-01-01T00:00:00.000Z",
+			obsidianLastSyncedAt: "2024-01-01T00:00:00.000Z",
+		});
+		(notion.retrievePageMarkdown as jest.Mock).mockResolvedValueOnce({
+			data: {
+				page: {
+					id: "page-id",
+					url: "https://www.notion.so/page-id",
+					last_edited_time: "2024-01-02T00:00:00.000Z",
+				},
+				markdown: "Remote body",
+			},
+			error: null,
+		});
+
+		const result = await pullFileFromNotion(pluginMock, fileMock);
+
+		expect(result.error).toBeNull();
+		expect(pluginMock.updateMarkdownFile).toHaveBeenCalledWith(
+			fileMock,
+			expect.stringContaining("Remote body")
+		);
+		expect(pluginMock.updateMarkdownFile).toHaveBeenCalledWith(
+			fileMock,
+			expect.stringContaining(
+				"notionLastEditedTime: 2024-01-02T00:00:00.000Z"
+			)
+		);
+	});
+
+	it("returns a conflict when Notion and Obsidian both changed", async () => {
+		fileMock.stat.mtime = Date.parse("2024-01-03T00:00:00.000Z");
+		(pluginMock.getContent as jest.Mock).mockResolvedValueOnce({
+			__content: "Local body",
+			notionPageId: "page-id",
+			notionLastEditedTime: "2024-01-01T00:00:00.000Z",
+			obsidianLastSyncedAt: "2024-01-01T00:00:00.000Z",
+		});
+		(notion.retrievePageMarkdown as jest.Mock).mockResolvedValueOnce({
+			data: {
+				page: {
+					id: "page-id",
+					last_edited_time: "2024-01-02T00:00:00.000Z",
+				},
+				markdown: "Remote body",
+			},
+			error: null,
+		});
+
+		const result = await pullFileFromNotion(pluginMock, fileMock);
+
+		expect(result.error?.message).toContain("Sync conflict");
+		expect(pluginMock.updateMarkdownFile).not.toHaveBeenCalled();
 	});
 });

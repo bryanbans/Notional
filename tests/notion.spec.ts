@@ -14,6 +14,7 @@ const settings: PluginSettings = {
 	bannerUrl: "",
 	notionWorkspaceID: "",
 	allowTags: false,
+	bidirectionalSync: false,
 };
 
 const paragraph = (content: string) => ({
@@ -106,5 +107,110 @@ describe("notion.uploadFileContent", () => {
 		expect(patchBodies).toHaveLength(2);
 		expect(patchBodies[0].children).toHaveLength(100);
 		expect(patchBodies[1].children).toHaveLength(1);
+	});
+
+	it("converts internal page mention marker links into Notion mention rich text", async () => {
+		(markdownToBlocks as jest.Mock).mockReturnValue([
+			{
+				object: "block",
+				type: "paragraph",
+				paragraph: {
+					rich_text: [
+						{
+							type: "text",
+							annotations: {
+								bold: false,
+								strikethrough: false,
+								underline: false,
+								italic: false,
+								code: false,
+								color: "default",
+							},
+							text: {
+								content: "Linked note",
+								link: {
+									type: "url",
+									url: "nobsidian://notion-page/notion-page-id",
+								},
+							},
+						},
+					],
+				},
+			},
+		]);
+
+		const result = await notion.uploadFileContent(
+			settings,
+			"page-id",
+			"See [Linked note](nobsidian://notion-page/notion-page-id)."
+		);
+		const body = getPatchBodies()[0];
+
+		expect(result.error).toBeNull();
+		expect(body.children[0].paragraph.rich_text[0]).toEqual({
+			type: "mention",
+			mention: {
+				type: "page",
+				page: {
+					id: "notion-page-id",
+				},
+			},
+			annotations: {
+				bold: false,
+				strikethrough: false,
+				underline: false,
+				italic: false,
+				code: false,
+				color: "default",
+			},
+		});
+	});
+});
+
+describe("notion.retrievePageMarkdown", () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
+	it("retrieves page metadata and converts child blocks to markdown", async () => {
+		(requestUrl as jest.Mock)
+			.mockResolvedValueOnce({
+				json: {
+					id: "page-id",
+					url: "https://www.notion.so/page-id",
+					last_edited_time: "2024-01-02T00:00:00.000Z",
+				},
+			})
+			.mockResolvedValueOnce({
+				json: {
+					results: [
+						{
+							id: "heading-id",
+							type: "heading_2",
+							heading_2: {
+								rich_text: [{ plain_text: "Section" }],
+							},
+						},
+						{
+							id: "todo-id",
+							type: "to_do",
+							to_do: {
+								checked: true,
+								rich_text: [{ plain_text: "Done" }],
+							},
+						},
+					],
+					has_more: false,
+					next_cursor: null,
+				},
+			});
+
+		const result = await notion.retrievePageMarkdown(settings, "page-id");
+
+		expect(result.error).toBeNull();
+		expect(result.data.markdown).toBe("## Section\n\n- [x] Done");
+		expect(result.data.page.last_edited_time).toBe(
+			"2024-01-02T00:00:00.000Z"
+		);
 	});
 });
