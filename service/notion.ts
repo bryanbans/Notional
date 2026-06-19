@@ -22,10 +22,40 @@
 import { requestUrl } from "obsidian";
 import { markdownToBlocks } from "@tryfabric/martian";
 import { PluginSettings, ServiceResult } from "./types";
+import { getNotionPageMentionId } from "./utils";
 
 // Notion requires every request to pin an API version. Keep this current with
 // the latest stable release: https://developers.notion.com/reference/versioning
 const NOTION_VERSION = "2022-06-28";
+
+const convertPageMentionLinks = (value: any): any => {
+	if (Array.isArray(value)) {
+		return value.map(convertPageMentionLinks);
+	}
+
+	if (!value || typeof value !== "object") return value;
+
+	const notionPageId = getNotionPageMentionId(value.text?.link?.url || "");
+	if (value.type === "text" && notionPageId) {
+		return {
+			type: "mention",
+			mention: {
+				type: "page",
+				page: {
+					id: notionPageId,
+				},
+			},
+			annotations: value.annotations,
+		};
+	}
+
+	const convertedValue = { ...value };
+	for (const key of Object.keys(convertedValue)) {
+		convertedValue[key] = convertPageMentionLinks(convertedValue[key]);
+	}
+
+	return convertedValue;
+};
 
 const createEmptyPage = async (
 	settings: PluginSettings,
@@ -85,7 +115,7 @@ const addContentToPage = async (
 	let res = null;
 	const notionAPIToken = settings.notionAPIToken;
 
-	const blocks = markdownToBlocks(content);
+	const blocks = convertPageMentionLinks(markdownToBlocks(content));
 
 	try {
 		res = await requestUrl({

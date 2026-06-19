@@ -5,7 +5,8 @@ import notion from "./notion";
 import {
 	updateNotionPageUrlWithWorkspaceId,
 	fromYamlFrontMatterToMarkdown,
-	getWikiLinkFromMarkdown,
+	createNotionPageMentionUrl,
+	getWikiLinksFromMarkdown,
 	replaceWikiWithHyperLink,
 } from "./utils";
 
@@ -67,33 +68,31 @@ export const initializeNotionPage = async (
 };
 
 /**
- * Convert Obsidian wiki-link into hyperlink.
+ * Convert Obsidian wiki-link into a Notion page mention marker.
  *
- * The hyperlink will have the same name as the wiki-link, but it will link
- * to the corresponding Notion page.
- *
- * We parse wiki-link into hyperlink because Notion doesn't understand wiki-link
- * and we haven't built a parser from wiki-link to Notion internal page mention.
+ * The marker is emitted as a markdown link so Martian preserves it in rich text.
+ * service/notion.ts converts that marker into a Notion page mention before
+ * appending blocks.
  *
  * @param markdown Original markdown content of an Obsidian markdown file
- * @returns Same markdown content, with wiki-link turned into hyperlink.
+ * @returns Same markdown content, with wiki-link turned into mention markers.
  */
 export const convertObsidianLinks = async (
 	plugin: NObsidian,
 	markdown: string
 ): Promise<string> => {
-	const links = getWikiLinkFromMarkdown(markdown);
+	const links = getWikiLinksFromMarkdown(markdown);
 	let updatedMarkdown = markdown;
 
-	for (const pageName of links) {
+	for (const link of links) {
 		let file: TFile | undefined;
 
-		if (plugin.fileNameToFile.has(pageName)) {
-			file = plugin.fileNameToFile.get(pageName);
+		if (plugin.fileNameToFile.has(link.pageName)) {
+			file = plugin.fileNameToFile.get(link.pageName);
 		}
 
 		// if file doesn't exist, create it
-		if (!file) file = await plugin.createEmptyMarkdownFile(pageName);
+		if (!file) file = await plugin.createEmptyMarkdownFile(link.pageName);
 		if (!file) continue;
 
 		// If file exists but doesn't have a corresponding notion page
@@ -102,14 +101,14 @@ export const convertObsidianLinks = async (
 			plugin,
 			file
 		);
-		const notionPageUrl = contentWithFrontMatter.notionPageUrl;
+		const notionPageId = contentWithFrontMatter.notionPageId;
 
-		if (notionPageUrl)
+		if (notionPageId)
 			updatedMarkdown = replaceWikiWithHyperLink(
 				updatedMarkdown,
-				pageName,
-				pageName,
-				notionPageUrl
+				link.rawLink,
+				link.displayName,
+				createNotionPageMentionUrl(notionPageId)
 			);
 	}
 

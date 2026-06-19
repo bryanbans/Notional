@@ -23,6 +23,14 @@ import { addIcon } from "obsidian";
 import { NoticeMsg } from "../static/message";
 import { icons } from "../static/icon";
 
+const NOTION_PAGE_MENTION_URL_PREFIX = "nobsidian://notion-page/";
+
+export type WikiLink = {
+	rawLink: string;
+	pageName: string;
+	displayName: string;
+};
+
 /**
  *
  * @param lang
@@ -95,6 +103,26 @@ export const getWikiLinkFromMarkdown = (markdown: string): Set<string> => {
 	return links;
 };
 
+export const getWikiLinksFromMarkdown = (markdown: string): WikiLink[] => {
+	const obsidianLinkRegex = /\[\[([^\]]+)\]\]/g;
+	const linksByRawLink = new Map<string, WikiLink>();
+	let match;
+
+	while ((match = obsidianLinkRegex.exec(markdown)) !== null) {
+		const rawLink = match[1];
+		const [target, alias] = rawLink.split("|");
+		const pageName = getBasenameFromPath(target.split("#")[0]);
+
+		linksByRawLink.set(rawLink, {
+			rawLink,
+			pageName,
+			displayName: alias || pageName,
+		});
+	}
+
+	return Array.from(linksByRawLink.values());
+};
+
 export const replaceWikiWithHyperLink = (
 	markdown: string,
 	wikiName: string,
@@ -107,6 +135,18 @@ export const replaceWikiWithHyperLink = (
 			"g"
 		),
 		`[${hyperLinkName}](${hyperlink})`
+	);
+};
+
+export const createNotionPageMentionUrl = (pageId: string): string => {
+	return `${NOTION_PAGE_MENTION_URL_PREFIX}${encodeURIComponent(pageId)}`;
+};
+
+export const getNotionPageMentionId = (url: string): string | null => {
+	if (!url.startsWith(NOTION_PAGE_MENTION_URL_PREFIX)) return null;
+
+	return decodeURIComponent(
+		url.slice(NOTION_PAGE_MENTION_URL_PREFIX.length)
 	);
 };
 

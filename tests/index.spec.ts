@@ -1,7 +1,10 @@
 jest.mock("obsidian");
 jest.mock("../service/notion");
 
-import { initializeNotionPage } from "../service/index";
+import {
+	convertObsidianLinks,
+	initializeNotionPage,
+} from "../service/index";
 import notion from "../service/notion";
 
 import NObsidian from "main";
@@ -48,5 +51,30 @@ describe("initializeNotionPage", () => {
 		);
 		expect(result.notionPageId).toBe("new-page-id");
 		expect(pluginMock.updateMarkdownFile).toHaveBeenCalled();
+	});
+});
+
+describe("convertObsidianLinks", () => {
+	let pluginMock: NObsidian;
+	let fileMock: TFile;
+
+	beforeEach(() => {
+		jest.clearAllMocks();
+		pluginMock = new NObsidian(new App(), {} as PluginManifest);
+		fileMock = new TFile();
+		fileMock.basename = "Linked note";
+		pluginMock.fileNameToFile.set(fileMock.basename, fileMock);
+	});
+
+	it("converts wiki-links into Notion page mention markers", async () => {
+		const result = await convertObsidianLinks(
+			pluginMock,
+			"See [[Linked note|the linked note]]."
+		);
+
+		expect(result).toBe(
+			"See [the linked note](nobsidian://notion-page/12345)."
+		);
+		expect(pluginMock.createEmptyMarkdownFile).not.toHaveBeenCalled();
 	});
 });
