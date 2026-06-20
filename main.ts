@@ -26,6 +26,7 @@ import {
 	PluginManifest,
 	TFile,
 	debounce,
+	normalizePath,
 } from "obsidian";
 import * as yamlFrontMatter from "yaml-front-matter";
 import {
@@ -309,7 +310,7 @@ export default class NObsidian extends Plugin {
 	}
 
 	async createEmptyMarkdownFile(pageName: string): Promise<TFile> {
-		const newFilePath = `/${pageName}.md`;
+		const newFilePath = normalizePath(`${pageName}.md`);
 		const newFile = await this.app.vault.create(newFilePath, "");
 		// file create handler will update fileNameToFile Map
 		// see registerCustomEvents

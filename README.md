@@ -29,11 +29,11 @@ conflict detection.
 
 ## Status
 
-`1.1.0-beta.1` is released and installable (see [Installation](#installation)).
-It is a **beta**: Obsidian-to-Notion upload is the most mature path, while the
-Notion-to-Obsidian pull/sync direction works but is conservative. Read
-[Current Limitations](#current-limitations) and test on throwaway notes before
-trusting it with important ones.
+`1.1.0` is released and installable (see [Installation](#installation)).
+Obsidian-to-Notion upload is the most mature path; the Notion-to-Obsidian
+pull/sync direction works but is conservative, and automatic sync is opt-in and
+experimental. Read [Current Limitations](#current-limitations) and test on
+throwaway notes before trusting it with important ones.
 
 ## Quick start
 

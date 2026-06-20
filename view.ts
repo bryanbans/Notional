@@ -218,24 +218,8 @@ export class SyncView extends ItemView {
 		}
 
 		conn.createSpan({ text: "Not configured" });
-		new ButtonComponent(root)
-			.setButtonText("Open settings")
-			.setClass("nob-settings-btn")
-			.onClick(() => {
-				// app.setting is not in the public typings; degrade gracefully.
-				try {
-					const setting = (
-						this.app as unknown as {
-							setting?: { open?: () => void };
-						}
-					).setting;
-					setting?.open?.();
-				} catch {
-					new Notice(this.plugin.message["config-settings"]);
-				}
-			});
 		root.createEl("p", {
-			text: "Set your Notion token and database ID in settings to start syncing.",
+			text: "Open Settings → nObsidian and add your Notion token and database to start syncing.",
 			cls: "nob-muted",
 		});
 	}
