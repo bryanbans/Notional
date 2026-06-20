@@ -279,8 +279,34 @@ const blockToMarkdown = (block: NotionBlock): string => {
 	}
 };
 
+const LIST_ITEM_TYPES = new Set([
+	"bulleted_list_item",
+	"numbered_list_item",
+	"to_do",
+]);
+
 const blocksToMarkdown = (blocks: NotionBlock[]): string => {
-	return blocks.map(blockToMarkdown).filter(Boolean).join("\n\n");
+	const parts: string[] = [];
+	let previousType: string | undefined;
+
+	for (const block of blocks) {
+		const markdown = blockToMarkdown(block);
+		if (!markdown) continue;
+
+		if (parts.length > 0) {
+			// Keep consecutive list items tight; separate everything else with
+			// a blank line.
+			const tight =
+				LIST_ITEM_TYPES.has(block.type || "") &&
+				LIST_ITEM_TYPES.has(previousType || "");
+			parts.push(tight ? "\n" : "\n\n");
+		}
+
+		parts.push(markdown);
+		previousType = block.type;
+	}
+
+	return parts.join("");
 };
 
 const retrievePage = async (

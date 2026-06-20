@@ -312,6 +312,44 @@ describe("notion.retrievePageMarkdown unsupported blocks", () => {
 		);
 	});
 
+	it("keeps consecutive list items tight but separates other blocks", async () => {
+		(requestUrl as jest.Mock)
+			.mockResolvedValueOnce({
+				json: { id: "page-id", last_edited_time: "2024-01-01T00:00:00.000Z" },
+			})
+			.mockResolvedValueOnce({
+				json: {
+					results: [
+						{
+							id: "p1",
+							type: "paragraph",
+							has_children: false,
+							paragraph: { rich_text: [{ plain_text: "Intro" }] },
+						},
+						{
+							id: "b1",
+							type: "bulleted_list_item",
+							has_children: false,
+							bulleted_list_item: { rich_text: [{ plain_text: "one" }] },
+						},
+						{
+							id: "b2",
+							type: "bulleted_list_item",
+							has_children: false,
+							bulleted_list_item: { rich_text: [{ plain_text: "two" }] },
+						},
+					],
+					has_more: false,
+					next_cursor: null,
+				},
+			});
+
+		const result = await notion.retrievePageMarkdown(settings, "page-id");
+
+		expect(result.error).toBeNull();
+		expect(result.data.markdown).toBe("Intro\n\n- one\n- two");
+	});
+
 	it("silently skips navigational blocks but keeps real content", async () => {
 		(requestUrl as jest.Mock)
 			.mockResolvedValueOnce({
