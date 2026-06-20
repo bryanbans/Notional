@@ -181,6 +181,35 @@ describe("pullFileFromNotion", () => {
 		);
 	});
 
+	it("preserves the note's own front matter when pulling", async () => {
+		(pluginMock.getContent as jest.Mock).mockResolvedValueOnce({
+			__content: "Local body",
+			notionPageId: "page-id",
+			notionLastEditedTime: "2024-01-01T00:00:00.000Z",
+			obsidianLastSyncedAt: "2024-01-01T00:00:00.000Z",
+			customField: "keepme",
+			aliases: ["one", "two"],
+		});
+		(notion.retrievePageMarkdown as jest.Mock).mockResolvedValueOnce({
+			data: {
+				page: {
+					id: "page-id",
+					last_edited_time: "2024-01-02T00:00:00.000Z",
+				},
+				markdown: "Remote body",
+			},
+			error: null,
+		});
+
+		const result = await pullFileFromNotion(pluginMock, fileMock);
+
+		expect(result.error).toBeNull();
+		const written = (pluginMock.updateMarkdownFile as jest.Mock).mock
+			.calls[0][1];
+		expect(written).toContain("customField: keepme");
+		expect(written).toContain("Remote body");
+	});
+
 	it("returns a conflict when Notion and Obsidian both changed", async () => {
 		fileMock.stat.mtime = Date.parse("2024-01-03T00:00:00.000Z");
 		(pluginMock.getContent as jest.Mock).mockResolvedValueOnce({

@@ -211,7 +211,51 @@ const IGNORED_BLOCK_TYPES = new Set([
 	"column",
 	"synced_block",
 	"template",
+	// Rendered by their parent "table" block, never standalone.
+	"table_row",
 ]);
+
+const mediaLinkToMarkdown = (block: NotionBlock, type: string): string => {
+	const typed = block[type] || {};
+	const url = typed.url || typed.external?.url || typed.file?.url || "";
+	if (!url) return "";
+
+	const label = richTextToMarkdown(typed.caption) || typed.name || type;
+	return `[${label}](${url})`;
+};
+
+const tableToMarkdown = (block: NotionBlock): string => {
+	const rows = getBlockChildren(block).filter(
+		(child) => child.type === "table_row"
+	);
+	if (rows.length === 0) return "";
+
+	const toCells = (row: NotionBlock): string[] =>
+		(row.table_row?.cells || []).map((cell: any[]) =>
+			richTextToMarkdown(cell).replace(/\|/g, "\\|").replace(/\n/g, " ").trim()
+		);
+
+	const renderRow = (cells: string[]) => `| ${cells.join(" | ")} |`;
+	const header = toCells(rows[0]);
+	const separator = header.map(() => "---");
+	const body = rows.slice(1).map(toCells);
+
+	return [
+		renderRow(header),
+		renderRow(separator),
+		...body.map(renderRow),
+	].join("\n");
+};
+
+const calloutToMarkdown = (text: string, body: string, foldable = false): string => {
+	const lines = [`> [!note]${foldable ? "-" : ""} ${text}`.trimEnd()];
+	if (body) {
+		for (const line of body.split("\n")) {
+			lines.push(line ? `> ${line}` : ">");
+		}
+	}
+	return lines.join("\n");
+};
 
 const blockToMarkdown = (block: NotionBlock): string => {
 	const children = getBlockChildren(block)
@@ -253,6 +297,37 @@ const blockToMarkdown = (block: NotionBlock): string => {
 			)}\n\`\`\``;
 		case "divider":
 			return "---";
+		case "image": {
+			const image = block.image;
+			const url = image?.external?.url || image?.file?.url || "";
+			const caption = richTextToMarkdown(image?.caption);
+			return url ? `![${caption}](${url})` : "";
+		}
+		case "callout":
+			return calloutToMarkdown(
+				richTextToMarkdown(block.callout?.rich_text),
+				children
+			);
+		case "toggle":
+			return calloutToMarkdown(
+				richTextToMarkdown(block.toggle?.rich_text),
+				children,
+				true
+			);
+		case "equation":
+			return block.equation?.expression
+				? `$$${block.equation.expression}$$`
+				: "";
+		case "table":
+			return tableToMarkdown(block);
+		case "bookmark":
+		case "embed":
+		case "link_preview":
+		case "video":
+		case "file":
+		case "pdf":
+		case "audio":
+			return mediaLinkToMarkdown(block, block.type);
 		default: {
 			// Unknown/unsupported type: never drop it silently. Preserve any
 			// text, nested children, and media URL, and flag it so the user

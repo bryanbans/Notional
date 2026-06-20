@@ -271,7 +271,7 @@ describe("notion.createDatabase", () => {
 describe("notion.retrievePageMarkdown unsupported blocks", () => {
 	beforeEach(() => jest.clearAllMocks());
 
-	it("flags unsupported blocks instead of dropping them and keeps text and URLs", async () => {
+	it("flags genuinely unknown blocks instead of dropping them, keeping text and URLs", async () => {
 		(requestUrl as jest.Mock)
 			.mockResolvedValueOnce({
 				json: { id: "page-id", last_edited_time: "2024-01-01T00:00:00.000Z" },
@@ -280,18 +280,12 @@ describe("notion.retrievePageMarkdown unsupported blocks", () => {
 				json: {
 					results: [
 						{
-							id: "callout-id",
-							type: "callout",
+							id: "x1",
+							type: "mystery_block",
 							has_children: false,
-							callout: { rich_text: [{ plain_text: "Heads up" }] },
-						},
-						{
-							id: "image-id",
-							type: "image",
-							has_children: false,
-							image: {
-								type: "file",
-								file: { url: "https://files.notion/img.png" },
+							mystery_block: {
+								rich_text: [{ plain_text: "Heads up" }],
+								external: { url: "https://example.com/thing" },
 							},
 						},
 					],
@@ -304,12 +298,9 @@ describe("notion.retrievePageMarkdown unsupported blocks", () => {
 
 		expect(result.error).toBeNull();
 		expect(result.data.markdown).toContain(
-			"> [!missing] Unsupported Notion block (callout)"
+			"> [!missing] Unsupported Notion block (mystery block): https://example.com/thing"
 		);
 		expect(result.data.markdown).toContain("Heads up");
-		expect(result.data.markdown).toContain(
-			"> [!missing] Unsupported Notion block (image): https://files.notion/img.png"
-		);
 	});
 
 	it("keeps consecutive list items tight but separates other blocks", async () => {
@@ -382,5 +373,106 @@ describe("notion.retrievePageMarkdown unsupported blocks", () => {
 		expect(result.data.markdown).toBe("Hello");
 		expect(result.data.markdown).not.toContain("[!missing]");
 		expect(result.data.markdown).not.toContain("breadcrumb");
+	});
+});
+
+describe("notion.retrievePageMarkdown rich blocks", () => {
+	beforeEach(() => jest.clearAllMocks());
+
+	it("converts image, callout, and equation blocks", async () => {
+		(requestUrl as jest.Mock)
+			.mockResolvedValueOnce({
+				json: { id: "page-id", last_edited_time: "2024-01-01T00:00:00.000Z" },
+			})
+			.mockResolvedValueOnce({
+				json: {
+					results: [
+						{
+							id: "img",
+							type: "image",
+							has_children: false,
+							image: {
+								type: "file",
+								file: { url: "https://x/img.png" },
+								caption: [{ plain_text: "cap" }],
+							},
+						},
+						{
+							id: "call",
+							type: "callout",
+							has_children: false,
+							callout: { rich_text: [{ plain_text: "Note text" }] },
+						},
+						{
+							id: "eq",
+							type: "equation",
+							has_children: false,
+							equation: { expression: "x^2" },
+						},
+					],
+					has_more: false,
+					next_cursor: null,
+				},
+			});
+
+		const result = await notion.retrievePageMarkdown(settings, "page-id");
+
+		expect(result.error).toBeNull();
+		expect(result.data.markdown).toContain("![cap](https://x/img.png)");
+		expect(result.data.markdown).toContain("> [!note] Note text");
+		expect(result.data.markdown).toContain("$$x^2$$");
+		expect(result.data.markdown).not.toContain("[!missing]");
+	});
+
+	it("converts a table block into a markdown table", async () => {
+		(requestUrl as jest.Mock)
+			.mockResolvedValueOnce({
+				json: { id: "page-id", last_edited_time: "2024-01-01T00:00:00.000Z" },
+			})
+			.mockResolvedValueOnce({
+				json: {
+					results: [
+						{
+							id: "tbl",
+							type: "table",
+							has_children: true,
+							table: { table_width: 2, has_column_header: true },
+						},
+					],
+					has_more: false,
+					next_cursor: null,
+				},
+			})
+			.mockResolvedValueOnce({
+				json: {
+					results: [
+						{
+							id: "r1",
+							type: "table_row",
+							has_children: false,
+							table_row: {
+								cells: [[{ plain_text: "A" }], [{ plain_text: "B" }]],
+							},
+						},
+						{
+							id: "r2",
+							type: "table_row",
+							has_children: false,
+							table_row: {
+								cells: [[{ plain_text: "1" }], [{ plain_text: "2" }]],
+							},
+						},
+					],
+					has_more: false,
+					next_cursor: null,
+				},
+			});
+
+		const result = await notion.retrievePageMarkdown(settings, "page-id");
+
+		expect(result.error).toBeNull();
+		expect(result.data.markdown).toBe(
+			"| A | B |\n| --- | --- |\n| 1 | 2 |"
+		);
 	});
 });
