@@ -73,9 +73,7 @@ export default class NObsidian extends Plugin {
 	constructor(app: App, manifest: PluginManifest) {
 		super(app, manifest);
 		this.settings = DEFAULT_SETTINGS;
-		this.message = NoticeMessageConfig(
-			window.localStorage.getItem("language") || "en"
-		);
+		this.message = NoticeMessageConfig("en");
 		this.fileNameToFile = new Map<string, TFile>();
 	}
 

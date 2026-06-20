@@ -10,6 +10,9 @@ on:
 
 permissions:
   contents: write
+  # Required to generate build-provenance attestations for the release assets.
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -27,6 +30,14 @@ jobs:
           npm run lint
           npm test
           npm run build
+
+      - name: Attest build provenance for release assets
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
 
       - name: Draft GitHub release with plugin assets
         env:
