@@ -21,7 +21,12 @@
 
 import { RequestUrlParam, RequestUrlResponse, requestUrl } from "obsidian";
 import { markdownToBlocks } from "@tryfabric/martian";
-import { NotionPage, PluginSettings, ServiceResult } from "./types";
+import {
+	NotionPage,
+	NotionPageMarkdown,
+	PluginSettings,
+	ServiceResult,
+} from "./types";
 import { getNotionPageMentionId } from "./utils";
 
 // Notion requires every request to pin an API version. Keep this current with
@@ -85,6 +90,11 @@ type BlockChildrenResponse = {
 
 const RETRYABLE_STATUSES = new Set([429, 502, 503, 504]);
 const MAX_RETRIES = 3;
+
+const errorResult = <T>(data: unknown, error: Error): ServiceResult<T> => ({
+	data: data as T,
+	error,
+});
 
 const sleep = (ms: number): Promise<void> =>
 	new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -482,7 +492,7 @@ const blocksToMarkdown = (blocks: NotionBlock[]): string => {
 const retrievePage = async (
 	settings: PluginSettings,
 	notionPageId: string
-): Promise<ServiceResult> => {
+): Promise<ServiceResult<NotionPage>> => {
 	let res: RequestUrlResponse | null = null;
 
 	try {
@@ -494,17 +504,17 @@ const retrievePage = async (
 
 		return { data: res.json as NotionPage, error: null };
 	} catch (error) {
-		return {
-			data: res,
-			error: Error(`Error retrieving Notion page: ${error}`),
-		};
+		return errorResult(
+			res,
+			Error(`Error retrieving Notion page: ${error}`)
+		);
 	}
 };
 
 const retrieveBlockChildren = async (
 	settings: PluginSettings,
 	blockId: string
-): Promise<ServiceResult> => {
+): Promise<ServiceResult<NotionBlock[]>> => {
 	let res: RequestUrlResponse | null = null;
 	const blocks: NotionBlock[] = [];
 	let startCursor: string | null = null;
@@ -544,22 +554,26 @@ const retrieveBlockChildren = async (
 
 		return { data: blocks, error: null };
 	} catch (error) {
-		return {
-			data: res,
-			error: Error(`Error retrieving Notion block children: ${error}`),
-		};
+		return errorResult(
+			res,
+			Error(`Error retrieving Notion block children: ${error}`)
+		);
 	}
 };
 
 const retrievePageMarkdown = async (
 	settings: PluginSettings,
 	notionPageId: string
-): Promise<ServiceResult> => {
+): Promise<ServiceResult<NotionPageMarkdown>> => {
 	const pageResult = await retrievePage(settings, notionPageId);
-	if (pageResult.error) return pageResult;
+	if (pageResult.error) {
+		return errorResult(pageResult.data, pageResult.error);
+	}
 
 	const childrenResult = await retrieveBlockChildren(settings, notionPageId);
-	if (childrenResult.error) return childrenResult;
+	if (childrenResult.error) {
+		return errorResult(childrenResult.data, childrenResult.error);
+	}
 
 	return {
 		data: {
@@ -572,7 +586,7 @@ const retrievePageMarkdown = async (
 
 const validateToken = async (
 	settings: PluginSettings
-): Promise<ServiceResult> => {
+): Promise<ServiceResult<{ name?: string }>> => {
 	let res: RequestUrlResponse | null = null;
 
 	try {
@@ -584,17 +598,17 @@ const validateToken = async (
 
 		return { data: res.json as { name?: string }, error: null };
 	} catch (error) {
-		return {
-			data: res,
-			error: Error(`Could not reach Notion with this token: ${error}`),
-		};
+		return errorResult(
+			res,
+			Error(`Could not reach Notion with this token: ${error}`)
+		);
 	}
 };
 
 const retrieveDatabase = async (
 	settings: PluginSettings,
 	databaseId: string
-): Promise<ServiceResult> => {
+): Promise<ServiceResult<NotionPage>> => {
 	let res: RequestUrlResponse | null = null;
 
 	try {
@@ -606,10 +620,10 @@ const retrieveDatabase = async (
 
 		return { data: res.json as NotionPage, error: null };
 	} catch (error) {
-		return {
-			data: res,
-			error: Error(`Could not access this Notion database: ${error}`),
-		};
+		return errorResult(
+			res,
+			Error(`Could not access this Notion database: ${error}`)
+		);
 	}
 };
 
@@ -617,7 +631,7 @@ const createDatabase = async (
 	settings: PluginSettings,
 	parentPageId: string,
 	title = "Obsidian Notes"
-): Promise<ServiceResult> => {
+): Promise<ServiceResult<{ id?: string }>> => {
 	let res: RequestUrlResponse | null = null;
 
 	const body = {
@@ -641,10 +655,10 @@ const createDatabase = async (
 
 		return { data: res.json as { id?: string }, error: null };
 	} catch (error) {
-		return {
-			data: res,
-			error: Error(`Error creating Notion database: ${error}`),
-		};
+		return errorResult(
+			res,
+			Error(`Error creating Notion database: ${error}`)
+		);
 	}
 };
 
@@ -652,7 +666,7 @@ const createEmptyPage = async (
 	settings: PluginSettings,
 	title: string,
 	tags: string[] = []
-): Promise<ServiceResult> => {
+): Promise<ServiceResult<NotionPage>> => {
 	let res: RequestUrlResponse | null = null;
 
 	const { databaseID, allowTags, bannerUrl } = settings;
@@ -689,10 +703,10 @@ const createEmptyPage = async (
 
 		return { data: res.json as NotionPage, error: null };
 	} catch (error) {
-		return {
-			data: res,
-			error: Error(`Error creating empty notion page ${error}`),
-		};
+		return errorResult(
+			res,
+			Error(`Error creating empty notion page ${error}`)
+		);
 	}
 };
 
@@ -722,7 +736,7 @@ const addContentToPage = async (
 const clearPageContent = async (
 	settings: PluginSettings,
 	notionPageId: string
-): Promise<ServiceResult> => {
+): Promise<ServiceResult<string | null>> => {
 	try {
 		// Retrieve the list of block children for the given page ID
 		const listResponse = await notionRequest({

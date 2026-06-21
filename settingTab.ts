@@ -19,7 +19,12 @@
     along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { PluginSettingTab, Setting, App } from "obsidian";
+import {
+	App,
+	PluginSettingTab,
+	Setting,
+	SettingDefinitionItem,
+} from "obsidian";
 import NObsidian from "main";
 import { PluginSettings, StringKeys, BooleanKeys } from "./service/types";
 import notion from "./service/notion";
@@ -33,11 +38,21 @@ export class NObsidianSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
-	display(): void {
-		const { containerEl } = this;
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		return [
+			{
+				name: "Notional settings",
+				searchable: false,
+				render: (setting) => {
+					const containerEl = setting.settingEl;
+					containerEl.empty();
+					this.renderSettings(containerEl);
+				},
+			},
+		];
+	}
 
-		containerEl.empty();
-
+	private renderSettings(containerEl: HTMLElement): void {
 		this.renderConnectSection(containerEl);
 		this.renderDatabaseSection(containerEl);
 		this.renderAutoSyncSection(containerEl);
@@ -160,7 +175,7 @@ export class NObsidianSettingTab extends PluginSettingTab {
 					.setButtonText(
 						this.plugin.settings.databaseID ? "Re-create" : "Create"
 					)
-					.setCta()
+					.setClass("mod-cta")
 					.onClick(async () => {
 						const pageId = extractNotionId(
 							this.plugin.settings.notionParentPageUrl
@@ -190,7 +205,7 @@ export class NObsidianSettingTab extends PluginSettingTab {
 						}
 						this.plugin.settings.databaseID = (result.data as { id: string }).id;
 						await this.plugin.saveSettings();
-						this.display();
+						this.update();
 					})
 			);
 	}

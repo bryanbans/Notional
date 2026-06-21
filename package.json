@@ -1,6 +1,6 @@
 {
 	"name": "notional",
-	"version": "1.1.9",
+	"version": "1.1.10",
 	"description": "Syncing Obsidian to Notion, and hopefully vice versa",
 	"main": "main.js",
 	"scripts": {
@@ -21,7 +21,7 @@
 		"eslint": "^9.0.0",
 		"eslint-plugin-obsidianmd": "^0.3.0",
 		"jest": "^29.7.0",
-		"obsidian": "latest",
+		"obsidian": "^1.13.1",
 		"ts-jest": "^29.2.0",
 		"tslib": "^2.8.0",
 		"typescript": "^5.6.0",

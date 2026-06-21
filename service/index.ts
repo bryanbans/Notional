@@ -1,8 +1,12 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument -- wraps Notion's untyped JSON REST API; response shapes are dynamic */
-
 import { TFile } from "obsidian";
 import NObsidian from "main";
-import { MarkdownWithFrontMatter, ServiceResult, SyncStatus } from "./types";
+import {
+	MarkdownWithFrontMatter,
+	NotionPage,
+	NotionPageMarkdown,
+	ServiceResult,
+	SyncStatus,
+} from "./types";
 import notion from "./notion";
 import {
 	updateNotionPageUrlWithWorkspaceId,
@@ -11,6 +15,11 @@ import {
 	getWikiLinksFromMarkdown,
 	replaceWikiWithHyperLink,
 } from "./utils";
+
+const errorResult = <T>(error: Error, data: unknown = null): ServiceResult<T> => ({
+	data: data as T,
+	error,
+});
 
 export const uploadFile = async (
 	plugin: NObsidian,
@@ -88,11 +97,17 @@ const initializeNotionPageContent = async (
 	const notionWorkspaceID = settings.notionWorkspaceID;
 
 	if (!contentWithFrontMatter.notionPageId) {
-		const { data } = await notion.createEmptyPage(
+		const createPageResult = await notion.createEmptyPage(
 			settings,
 			file.basename
 		);
+		if (createPageResult.error) throw createPageResult.error;
+
+		const data = createPageResult.data as NotionPage;
 		const { url: rawNotionPageUrl, id: notionPageId } = data;
+		if (!rawNotionPageUrl || !notionPageId) {
+			throw Error("Notion did not return a page URL or ID");
+		}
 
 		const notionPageUrl = updateNotionPageUrlWithWorkspaceId(
 			rawNotionPageUrl,
@@ -119,7 +134,7 @@ const updateSyncMetadata = async (
 	plugin: NObsidian,
 	file: TFile,
 	contentWithFrontMatter: MarkdownWithFrontMatter,
-	notionPage: any,
+	notionPage: NotionPage,
 	content = contentWithFrontMatter.__content
 ) => {
 	const processedMarkdown = fromYamlFrontMatterToMarkdown({
@@ -153,7 +168,7 @@ const hasLocalChangesSinceLastSync = (
 
 const hasNotionChangesSinceLastSync = (
 	contentWithFrontMatter: MarkdownWithFrontMatter,
-	notionPage: any
+	notionPage: NotionPage
 ): boolean => {
 	return isAfter(
 		notionPage.last_edited_time,
@@ -172,7 +187,7 @@ const hasNotionChangesSinceLastSync = (
 export const getSyncStatus = async (
 	plugin: NObsidian,
 	file: TFile
-): Promise<ServiceResult> => {
+): Promise<ServiceResult<SyncStatus>> => {
 	const contentWithFrontMatter = await plugin.getContent(file);
 	const notionPageId = contentWithFrontMatter.notionPageId;
 
@@ -187,11 +202,14 @@ export const getSyncStatus = async (
 	}
 
 	const pageResult = await notion.retrievePage(plugin.settings, notionPageId);
-	if (pageResult.error) return pageResult;
+	if (pageResult.error) {
+		return errorResult(pageResult.error, pageResult.data);
+	}
+	const notionPage = pageResult.data as NotionPage;
 
 	const hasRemoteChanges = hasNotionChangesSinceLastSync(
 		contentWithFrontMatter,
-		pageResult.data
+		notionPage
 	);
 	const hasLocalChanges = hasLocalChangesSinceLastSync(
 		file,
@@ -203,7 +221,7 @@ export const getSyncStatus = async (
 		notionPageId,
 		notionPageUrl: contentWithFrontMatter.notionPageUrl,
 		obsidianLastSyncedAt: contentWithFrontMatter.obsidianLastSyncedAt,
-		notionLastEditedTime: pageResult.data.last_edited_time,
+		notionLastEditedTime: notionPage.last_edited_time,
 		hasLocalChanges,
 		hasRemoteChanges,
 		conflict: hasLocalChanges && hasRemoteChanges,
@@ -216,14 +234,15 @@ export const pullFileFromNotion = async (
 	plugin: NObsidian,
 	file: TFile,
 	options: { force?: boolean } = {}
-): Promise<ServiceResult> => {
+): Promise<ServiceResult<NotionPageMarkdown>> => {
 	const contentWithFrontMatter = await plugin.getContent(file);
 	const notionPageId = contentWithFrontMatter.notionPageId;
 
 	if (!notionPageId) {
 		return {
-			data: null,
-			error: Error("Missing notionPageId for "),
+			...errorResult<NotionPageMarkdown>(
+				Error("Missing notionPageId for ")
+			),
 		};
 	}
 
@@ -245,8 +264,9 @@ export const pullFileFromNotion = async (
 
 	if (!options.force && hasRemoteChanges && hasLocalChanges) {
 		return {
-			data: null,
-			error: Error("Sync conflict: both Obsidian and Notion changed "),
+			...errorResult<NotionPageMarkdown>(
+				Error("Sync conflict: both Obsidian and Notion changed ")
+			),
 		};
 	}
 
@@ -272,10 +292,11 @@ export const syncFile = async (
 
 	const pageResult = await notion.retrievePage(plugin.settings, notionPageId);
 	if (pageResult.error) return pageResult;
+	const notionPage = pageResult.data;
 
 	const hasRemoteChanges = hasNotionChangesSinceLastSync(
 		contentWithFrontMatter,
-		pageResult.data
+		notionPage
 	);
 	const hasLocalChanges = hasLocalChangesSinceLastSync(
 		file,
@@ -303,7 +324,10 @@ export const runWithConcurrency = async <T, R>(
 		throw Error("Concurrency must be a positive integer");
 	}
 
-	const results: R[] = new Array(items.length);
+	const results = Array.from(
+		{ length: items.length },
+		(): R | undefined => undefined
+	);
 	let nextIndex = 0;
 
 	const runWorker = async () => {
@@ -320,7 +344,7 @@ export const runWithConcurrency = async <T, R>(
 	);
 	await Promise.all(workers);
 
-	return results;
+	return results as R[];
 };
 
 /**
@@ -371,4 +395,3 @@ export const convertObsidianLinks = async (
 	return updatedMarkdown;
 };
 
-/* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */

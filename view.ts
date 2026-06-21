@@ -319,7 +319,7 @@ export class SyncView extends ItemView {
 			);
 		new ButtonComponent(buttons)
 			.setButtonText("Keep Notion → local")
-			.setWarning()
+			.setClass("mod-warning")
 			.setDisabled(this.busy)
 			.onClick(() =>
 				this.runAction("Resolved (kept Notion)", (file) =>
@@ -333,7 +333,7 @@ export class SyncView extends ItemView {
 
 		new ButtonComponent(actions)
 			.setButtonText(this.busy ? "Working…" : "Sync")
-			.setCta()
+			.setClass("mod-cta")
 			.setDisabled(this.busy)
 			.onClick(() =>
 				this.runAction("Synced", (file) => syncFile(this.plugin, file))
