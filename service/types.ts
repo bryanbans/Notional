@@ -54,7 +54,7 @@ export type MarkdownWithFrontMatter = {
 };
 
 export type ServiceResult = {
-	data: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+	data: any; // eslint-disable-line @typescript-eslint/no-explicit-any -- ServiceResult wraps untyped API responses
 	error: Error | null;
 };
 
@@ -76,4 +76,9 @@ export type SyncStatus = {
 export type BulkUploadFileResult = {
 	fileName: string;
 	error: Error | null;
+};
+
+export type NotionPage = {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Notion API response is untyped JSON
+	[key: string]: any;
 };
