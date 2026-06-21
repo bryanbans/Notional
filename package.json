@@ -1,7 +1,7 @@
 {
 	"name": "notional",
-	"version": "1.2.0",
-	"description": "Syncing Obsidian to Notion, and hopefully vice versa",
+	"version": "1.2.1",
+	"description": "Two-way sync between your Markdown notes and Notion, with one-click connect and conflict-aware Push/Pull.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
