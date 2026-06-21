@@ -1,13 +1,17 @@
-# Notional
+<p align="center">
+  <img src="docs/assets/notional-logo.png" alt="Notional" width="480">
+</p>
 
-### Write in Obsidian. Share in Notion. Stop copy‑pasting between them.
+<h3 align="center">Write in Obsidian. Share in Notion. Stop copy‑pasting between them.</h3>
+
+<p align="center">
+  <a href="https://github.com/bryanbans/Notional/releases"><img src="https://img.shields.io/github/v/release/bryanbans/Notional?label=release" alt="Latest release"></a>
+  <a href="https://github.com/bryanbans/Notional/actions/workflows/ci.yml"><img src="https://github.com/bryanbans/Notional/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-blue.svg" alt="License: GPL v3"></a>
+  <a href="manifest.json"><img src="https://img.shields.io/badge/Obsidian-1.13.0%2B-7c3aed" alt="Obsidian 1.13.0+"></a>
+</p>
 
 Notional is the missing bridge between the app where you *think* and the app where your team *works*. Draft in the speed and privacy of Obsidian, then send polished, fully‑formatted pages to Notion in one click — links intact, structure preserved, nothing overwritten by surprise.
-
-[![Latest release](https://img.shields.io/github/v/release/bryanbans/Notional?label=release)](https://github.com/bryanbans/Notional/releases)
-[![CI](https://github.com/bryanbans/Notional/actions/workflows/ci.yml/badge.svg)](https://github.com/bryanbans/Notional/actions/workflows/ci.yml)
-[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
-[![Obsidian](https://img.shields.io/badge/Obsidian-1.13.0%2B-7c3aed)](manifest.json)
 
 ---
 
