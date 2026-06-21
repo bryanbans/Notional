@@ -107,7 +107,7 @@ const initializeNotionPageContent = async (
 			contentWithFrontMatter
 		);
 
-		plugin.updateMarkdownFile(file, processedMarkdown);
+		await plugin.updateMarkdownFile(file, processedMarkdown);
 	}
 
 	return contentWithFrontMatter;

@@ -91,7 +91,7 @@ export default class NObsidian extends Plugin {
 			(leaf) => new SyncView(leaf, this)
 		);
 		this.addRibbonIcon("sync", "Open Notional sync panel", () => {
-			this.activateSyncView();
+			void this.activateSyncView();
 		});
 
 		// Add commands to vault
@@ -122,7 +122,7 @@ export default class NObsidian extends Plugin {
 			id: "share-to-notion",
 			name: "Upload current note to Notion",
 			editorCallback: async () => {
-				this.uploadCurrentNote();
+				void this.uploadCurrentNote();
 			},
 		});
 
@@ -130,7 +130,7 @@ export default class NObsidian extends Plugin {
 			id: "bulk-share-to-notion",
 			name: "Upload entire vault to Notion",
 			callback: async () => {
-				this.bulkUpload();
+				void this.bulkUpload();
 			},
 		});
 
@@ -138,7 +138,7 @@ export default class NObsidian extends Plugin {
 			id: "pull-current-note-from-notion",
 			name: "Pull current note from Notion",
 			editorCallback: async () => {
-				this.pullCurrentNote();
+				void this.pullCurrentNote();
 			},
 		});
 
@@ -146,7 +146,7 @@ export default class NObsidian extends Plugin {
 			id: "sync-current-note-with-notion",
 			name: "Sync current note with Notion",
 			editorCallback: async () => {
-				this.syncCurrentNote();
+				void this.syncCurrentNote();
 			},
 		});
 
@@ -154,7 +154,7 @@ export default class NObsidian extends Plugin {
 			id: "open-sync-panel",
 			name: "Open sync panel",
 			callback: () => {
-				this.activateSyncView();
+				void this.activateSyncView();
 			},
 		});
 	}
@@ -170,7 +170,7 @@ export default class NObsidian extends Plugin {
 			await leaf.setViewState({ type: VIEW_TYPE_SYNC, active: true });
 		}
 
-		workspace.revealLeaf(leaf);
+		void workspace.revealLeaf(leaf);
 	}
 
 	registerCustomEvents() {
@@ -213,7 +213,7 @@ export default class NObsidian extends Plugin {
 			return null;
 		}
 
-		this.uploadFile(nowFile);
+		void this.uploadFile(nowFile);
 	}
 
 	async bulkUpload() {

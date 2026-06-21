@@ -9,8 +9,9 @@ export default [
 			parser: tseslint.parser,
 			parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
 		},
-		plugins: { obsidianmd },
+		plugins: { obsidianmd, "@typescript-eslint": tseslint.plugin },
 		rules: {
+			"@typescript-eslint/no-floating-promises": "error",
 			"obsidianmd/no-unsupported-api": "error",
 			"obsidianmd/settings-tab/no-manual-html-headings": "error",
 			"obsidianmd/settings-tab/no-problematic-settings-headings": "warn",
