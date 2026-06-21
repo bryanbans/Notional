@@ -191,11 +191,16 @@ export default class NObsidian extends Plugin {
 			return;
 		}
 
-		if (
-			params.state &&
-			this.pendingOAuthState &&
-			params.state !== this.pendingOAuthState
-		) {
+		// Claim the in-flight request up front. The redirect can fire the
+		// handler more than once; since Notion consumes the code on first use, a
+		// duplicate would otherwise attempt a second exchange and surface a
+		// spurious "code revoked" error after we have already connected.
+		const pendingState = this.pendingOAuthState;
+		this.pendingOAuthState = null;
+		if (!pendingState) {
+			return;
+		}
+		if (params.state && params.state !== pendingState) {
 			new Notice(
 				"The Notion callback did not match the pending request. Please connect again."
 			);
