@@ -22,7 +22,7 @@ and no silent overwrites.
 | Capability | Status |
 | --- | --- |
 | Push the current note to Notion | Stable |
-| Push the whole vault with bounded parallelism | Stable |
+| Push the current folder with bounded parallelism | Stable |
 | Create Notion pages for linked notes | Stable |
 | Convert Obsidian wiki-links to Notion page mentions | Stable |
 | Upload deeply nested blocks past Notion's append limit | Stable |
@@ -93,7 +93,7 @@ timestamp-based path.
 | Command | What it does |
 | --- | --- |
 | Upload current note to Notion | Pushes the active file |
-| Upload entire vault to Notion | Pushes Markdown files with bounded concurrency |
+| Upload current folder to Notion | Pushes Markdown files from the active note's folder; root notes upload alone |
 | Pull current note from Notion | Updates the active file from its linked Notion page |
 | Sync current note with Notion | Chooses push or pull from sync metadata |
 | Open sync panel | Opens the side panel for the active note |
@@ -173,7 +173,7 @@ The code is split around the sync pipeline:
 
 Recently shipped:
 
-- parallel vault upload
+- parallel current-folder upload that avoids whole-vault file enumeration
 - deep nested block append
 - wiki-links as Notion page mentions
 - pull and sync commands
@@ -181,7 +181,7 @@ Recently shipped:
 - guided setup with connection testing and database creation
 - sync side panel
 - opt-in automatic sync
-- Marketplace review cleanup through release `1.1.11`
+- Marketplace review cleanup through release `1.1.12`
 
 Next:
 

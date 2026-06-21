@@ -118,17 +118,25 @@ describe("convertObsidianLinks", () => {
 		pluginMock = new NObsidian(new App(), {} as PluginManifest);
 		fileMock = new TFile();
 		fileMock.basename = "Linked note";
-		pluginMock.fileNameToFile.set(fileMock.basename, fileMock);
+		fileMock.path = "Linked note.md";
+		(pluginMock.getLinkedMarkdownFile as jest.Mock).mockReturnValue(
+			fileMock
+		);
 	});
 
 	it("converts wiki-links into Notion page mention markers", async () => {
 		const result = await convertObsidianLinks(
 			pluginMock,
+			fileMock,
 			"See [[Linked note|the linked note]]."
 		);
 
 		expect(result).toBe(
 			"See [the linked note](notional://notion-page/12345)."
+		);
+		expect(pluginMock.getLinkedMarkdownFile).toHaveBeenCalledWith(
+			"Linked note",
+			fileMock.path
 		);
 		expect(pluginMock.createEmptyMarkdownFile).not.toHaveBeenCalled();
 	});

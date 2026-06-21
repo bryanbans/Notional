@@ -1,11 +1,10 @@
-import { TFile, App, PluginManifest } from "obsidian";
+import { App, PluginManifest } from "obsidian";
 import { PluginSettings } from "../service/types";
 import { NoticeMessageConfig } from "../service/utils";
 
 class NObsidian {
 	settings: PluginSettings;
 	message: { [key: string]: string };
-	fileNameToFile: Map<string, TFile>;
 
 	constructor(app: App, manifest: PluginManifest) {
 		this.settings = {
@@ -19,7 +18,6 @@ class NObsidian {
 			autoSyncIntervalMinutes: 5,
 		};
 		this.message = NoticeMessageConfig("en");
-		this.fileNameToFile = new Map<string, TFile>();
 	}
 
 	getContent = jest.fn().mockResolvedValue({
@@ -33,6 +31,8 @@ class NObsidian {
 	createEmptyMarkdownFile = jest.fn().mockResolvedValue({
 		basename: "New Document",
 	});
+
+	getLinkedMarkdownFile = jest.fn();
 
 	updateMarkdownFile = jest.fn();
 }

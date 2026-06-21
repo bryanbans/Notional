@@ -25,6 +25,7 @@ import {
 	Plugin,
 	PluginManifest,
 	TFile,
+	TFolder,
 	debounce,
 	normalizePath,
 } from "obsidian";
@@ -37,7 +38,6 @@ import {
 import { NObsidianSettingTab } from "settingTab";
 import {
 	NoticeMessageConfig,
-	getBasenameFromPath,
 	parseFrontMatter,
 } from "service/utils";
 import {
@@ -65,7 +65,6 @@ const BULK_UPLOAD_CONCURRENCY = 3;
 export default class NObsidian extends Plugin {
 	settings: PluginSettings;
 	message: { [key: string]: string };
-	fileNameToFile: Map<string, TFile>;
 
 	// Auto-sync bookkeeping.
 	private suppressModify: Map<string, number> = new Map();
@@ -77,7 +76,6 @@ export default class NObsidian extends Plugin {
 		super(app, manifest);
 		this.settings = DEFAULT_SETTINGS;
 		this.message = NoticeMessageConfig("en");
-		this.fileNameToFile = new Map<string, TFile>();
 	}
 
 	async onload() {
@@ -99,15 +97,6 @@ export default class NObsidian extends Plugin {
 
 		// Add commands to vault
 		this.addCustomCommands();
-
-		// Furnish the map
-		const markdownFiles = this.app.vault.getMarkdownFiles();
-		markdownFiles.forEach((file) => {
-			this.fileNameToFile.set(file.basename, file);
-		});
-
-		// Register events
-		this.registerCustomEvents();
 
 		// Wire up optional automatic background sync.
 		this.registerAutoSync();
@@ -131,9 +120,9 @@ export default class NObsidian extends Plugin {
 
 		this.addCommand({
 			id: "bulk-share-to-notion",
-			name: "Upload entire vault to Notion",
+			name: "Upload current folder to Notion",
 			callback: async () => {
-				void this.bulkUpload();
+				void this.uploadCurrentFolder();
 			},
 		});
 
@@ -176,34 +165,6 @@ export default class NObsidian extends Plugin {
 		void workspace.revealLeaf(leaf);
 	}
 
-	registerCustomEvents() {
-		this.registerEvent(
-			this.app.vault.on("create", (file) => {
-				if (file instanceof TFile) {
-					this.fileNameToFile.set(file.basename, file);
-				}
-			})
-		);
-
-		this.registerEvent(
-			this.app.vault.on("delete", (file) => {
-				if (file instanceof TFile) {
-					this.fileNameToFile.delete(file.basename);
-				}
-			})
-		);
-
-		this.registerEvent(
-			this.app.vault.on("rename", (file, oldPath) => {
-				if (file instanceof TFile) {
-					const oldName = getBasenameFromPath(oldPath);
-					this.fileNameToFile.delete(oldName);
-					this.fileNameToFile.set(file.basename, file);
-				}
-			})
-		);
-	}
-
 	async uploadCurrentNote() {
 		if (!this.hasValidNotionCredentials()) {
 			new Notice(this.message["config-settings"]);
@@ -219,13 +180,19 @@ export default class NObsidian extends Plugin {
 		void this.uploadFile(nowFile);
 	}
 
-	async bulkUpload() {
+	async uploadCurrentFolder() {
 		if (!this.hasValidNotionCredentials()) {
 			new Notice(this.message["config-settings"]);
 			return;
 		}
 
-		const markdownFiles = this.app.vault.getMarkdownFiles();
+		const nowFile = this.app.workspace.getActiveFile();
+		if (!nowFile) {
+			new Notice(this.message["open-file"]);
+			return;
+		}
+
+		const markdownFiles = this.collectUploadScope(nowFile);
 		const results = await runWithConcurrency(
 			markdownFiles,
 			BULK_UPLOAD_CONCURRENCY,
@@ -252,13 +219,42 @@ export default class NObsidian extends Plugin {
 		if (failedUploads.length > 0) {
 			const succeededUploads = results.length - failedUploads.length;
 			new Notice(
-				`Vault sync finished: ${succeededUploads}/${results.length} notes uploaded. ${failedUploads.length} failed.`,
+				`Folder sync finished: ${succeededUploads}/${results.length} notes uploaded. ${failedUploads.length} failed.`,
 				5000
 			);
 			return;
 		}
 
 		new Notice(this.message["all-sync-success"]);
+	}
+
+	getLinkedMarkdownFile(linkPath: string, sourcePath: string): TFile | null {
+		return this.app.metadataCache.getFirstLinkpathDest(
+			linkPath,
+			sourcePath
+		);
+	}
+
+	private collectUploadScope(file: TFile): TFile[] {
+		const folder = file.parent;
+		if (!folder || folder.isRoot()) return [file];
+
+		return this.collectFolderNotes(folder);
+	}
+
+	private collectFolderNotes(folder: TFolder | null): TFile[] {
+		if (!folder) return [];
+
+		const markdownFiles: TFile[] = [];
+		for (const child of folder.children) {
+			if (child instanceof TFile && child.extension === "md") {
+				markdownFiles.push(child);
+			} else if (child instanceof TFolder) {
+				markdownFiles.push(...this.collectFolderNotes(child));
+			}
+		}
+
+		return markdownFiles;
 	}
 
 	async pullCurrentNote() {
@@ -317,8 +313,6 @@ export default class NObsidian extends Plugin {
 	async createEmptyMarkdownFile(pageName: string): Promise<TFile> {
 		const newFilePath = normalizePath(`${pageName}.md`);
 		const newFile = await this.app.vault.create(newFilePath, "");
-		// file create handler will update fileNameToFile Map
-		// see registerCustomEvents
 		return newFile;
 	}
 

@@ -29,6 +29,7 @@ export const uploadFile = async (
 
 	const content = await convertObsidianLinks(
 		plugin,
+		file,
 		contentWithFrontMatter.__content
 	);
 
@@ -356,17 +357,17 @@ export const runWithConcurrency = async <T, R>(
  */
 export const convertObsidianLinks = async (
 	plugin: NObsidian,
+	sourceFile: TFile,
 	markdown: string
 ): Promise<string> => {
 	const links = getWikiLinksFromMarkdown(markdown);
 	let updatedMarkdown = markdown;
 
 	for (const link of links) {
-		let file: TFile | undefined;
-
-		if (plugin.fileNameToFile.has(link.pageName)) {
-			file = plugin.fileNameToFile.get(link.pageName);
-		}
+		let file = plugin.getLinkedMarkdownFile(
+			link.pageName,
+			sourceFile.path
+		);
 
 		// if file doesn't exist, create it
 		if (!file) file = await plugin.createEmptyMarkdownFile(link.pageName);
