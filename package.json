@@ -11,7 +11,20 @@
 		"lint:obsidian": "eslint --config eslint.obsidian.mjs main.ts view.ts settingTab.ts \"service/**/*.ts\"",
 		"test": "npx jest"
 	},
-	"keywords": [],
+	"keywords": [
+		"obsidian",
+		"obsidian-plugin",
+		"notion",
+		"notion-api",
+		"obsidian-to-notion",
+		"obsidian-notion-sync",
+		"two-way-sync",
+		"markdown",
+		"note-taking",
+		"knowledge-management",
+		"pkm",
+		"second-brain"
+	],
 	"author": "bryanbans",
 	"devDependencies": {
 		"@eslint/js": "^9.0.0",

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+		<!-- Primary SEO -->
+		<title>Notional — Two-Way Obsidian ↔ Notion Sync Plugin</title>
+		<meta
+			name="description"
+			content="Notional is a free, open-source Obsidian plugin that syncs your Markdown notes to Notion. One-click connect, wiki-links become Notion page mentions, and conflict-safe Push / Pull / Sync that never overwrites silently."
+		/>
+		<meta
+			name="keywords"
+			content="obsidian notion sync, obsidian to notion, notion obsidian plugin, sync obsidian with notion, two-way sync, markdown to notion, obsidian plugin, notion api, pkm, second brain"
+		/>
+		<meta name="author" content="bryanbans" />
+		<link rel="canonical" href="https://bryanbans.github.io/Notional/" />
+		<meta name="robots" content="index, follow" />
+
+		<!-- Open Graph -->
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="Notional" />
+		<meta
+			property="og:title"
+			content="Notional — Two-Way Obsidian ↔ Notion Sync Plugin"
+		/>
+		<meta
+			property="og:description"
+			content="Write in Obsidian. Share in Notion. Stop copy-pasting. One-click connect, wiki-links as page mentions, conflict-safe sync."
+		/>
+		<meta property="og:url" content="https://bryanbans.github.io/Notional/" />
+		<meta
+			property="og:image"
+			content="https://raw.githubusercontent.com/bryanbans/Notional/main/docs/assets/notional-logo-horizontal-dark-final.png"
+		/>
+
+		<!-- Twitter / X card -->
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta
+			name="twitter:title"
+			content="Notional — Two-Way Obsidian ↔ Notion Sync Plugin"
+		/>
+		<meta
+			name="twitter:description"
+			content="Free, open-source Obsidian plugin that syncs Markdown notes to Notion with conflict-safe two-way sync."
+		/>
+		<meta
+			name="twitter:image"
+			content="https://raw.githubusercontent.com/bryanbans/Notional/main/docs/assets/notional-logo-horizontal-dark-final.png"
+		/>
+
+		<!-- Structured data: helps Google show a rich result -->
+		<script type="application/ld+json">
+			{
+				"@context": "https://schema.org",
+				"@type": "SoftwareApplication",
+				"name": "Notional",
+				"applicationCategory": "BrowserApplication",
+				"operatingSystem": "Windows, macOS, Linux (via Obsidian)",
+				"description": "Free, open-source Obsidian plugin for two-way sync between Markdown notes and Notion, with one-click connect, wiki-links as Notion page mentions, and conflict-safe Push / Pull / Sync.",
+				"url": "https://bryanbans.github.io/Notional/",
+				"downloadUrl": "https://github.com/bryanbans/Notional/releases",
+				"softwareVersion": "1.2.2",
+				"license": "https://www.gnu.org/licenses/gpl-3.0.html",
+				"author": {
+					"@type": "Person",
+					"name": "bryanbans",
+					"url": "https://github.com/bryanbans"
+				},
+				"offers": {
+					"@type": "Offer",
+					"price": "0",
+					"priceCurrency": "USD"
+				}
+			}
+		</script>
+
+		<style>
+			:root {
+				--accent: #7c3aed;
+				--ink: #1a1a1f;
+				--muted: #5b5b66;
+				--bg: #ffffff;
+				--soft: #f5f3fb;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+					Helvetica, Arial, sans-serif;
+				margin: 0;
+				color: var(--ink);
+				background: var(--bg);
+				line-height: 1.6;
+			}
+			.wrap {
+				max-width: 50rem;
+				margin: 0 auto;
+				padding: 0 1.25rem;
+			}
+			header {
+				text-align: center;
+				padding: 3.5rem 1.25rem 2rem;
+				background: linear-gradient(180deg, var(--soft), #ffffff);
+			}
+			header img {
+				max-width: 460px;
+				width: 90%;
+				height: auto;
+			}
+			h1 {
+				font-size: 1.9rem;
+				margin: 1.25rem 0 0.5rem;
+			}
+			.tag {
+				color: var(--muted);
+				font-size: 1.15rem;
+				margin: 0 auto 1.5rem;
+				max-width: 36rem;
+			}
+			.cta {
+				display: inline-block;
+				background: var(--accent);
+				color: #fff;
+				text-decoration: none;
+				padding: 0.7rem 1.4rem;
+				border-radius: 8px;
+				font-weight: 600;
+				margin: 0.3rem;
+			}
+			.cta.ghost {
+				background: #fff;
+				color: var(--accent);
+				border: 1px solid var(--accent);
+			}
+			section {
+				padding: 2rem 0;
+				border-top: 1px solid #eee;
+			}
+			h2 {
+				font-size: 1.4rem;
+			}
+			.grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+				gap: 1rem;
+			}
+			.card {
+				background: var(--soft);
+				border-radius: 10px;
+				padding: 1.1rem 1.2rem;
+			}
+			.card h3 {
+				margin: 0 0 0.4rem;
+				font-size: 1.05rem;
+			}
+			details {
+				border-bottom: 1px solid #eee;
+				padding: 0.75rem 0;
+			}
+			summary {
+				font-weight: 600;
+				cursor: pointer;
+			}
+			footer {
+				text-align: center;
+				color: var(--muted);
+				font-size: 0.9rem;
+				padding: 2.5rem 1.25rem;
+			}
+			a {
+				color: var(--accent);
+			}
+		</style>
+	</head>
+	<body>
+		<header>
+			<div class="wrap">
+				<img
+					src="assets/notional-logo-horizontal-dark-final.png"
+					alt="Notional — Obsidian to Notion sync plugin logo"
+				/>
+				<h1>Two-way sync between Obsidian and Notion</h1>
+				<p class="tag">
+					Write in Obsidian. Share in Notion. Stop copy-pasting between
+					them. Notional is a free, open-source Obsidian plugin that pushes
+					and pulls your Markdown notes to Notion — links intact, structure
+					preserved, nothing overwritten by surprise.
+				</p>
+				<a class="cta" href="https://github.com/bryanbans/Notional"
+					>View on GitHub</a
+				>
+				<a
+					class="cta ghost"
+					href="https://github.com/bryanbans/Notional/releases"
+					>Download latest release</a
+				>
+			</div>
+		</header>
+
+		<div class="wrap">
+			<section>
+				<h2>Why sync Obsidian with Notion?</h2>
+				<p>
+					You think in Obsidian — it is fast, private, and yours. But your
+					clients, teammates, and shared wikis live in Notion. Copy-pasting
+					between them breaks your <code>[[wiki-links]]</code>, flattens
+					nested outlines, and leaves you with stale duplicates. Notional
+					ends the copy-paste tax: one command and your note lands in Notion
+					looking the way it should.
+				</p>
+			</section>
+
+			<section>
+				<h2>Features</h2>
+				<div class="grid">
+					<div class="card">
+						<h3>🔁 True two-way sync</h3>
+						<p>
+							Push notes to Notion and pull teammates' edits back into
+							Obsidian. Sync picks the right direction automatically.
+						</p>
+					</div>
+					<div class="card">
+						<h3>🔗 Wiki-links → page mentions</h3>
+						<p>
+							Your <code>[[internal links]]</code> become real,
+							clickable Notion page mentions — not dead plain text.
+						</p>
+					</div>
+					<div class="card">
+						<h3>🛟 Never overwrites silently</h3>
+						<p>
+							If both sides changed, Notional stops and asks which
+							version to keep. No surprise data loss, ever.
+						</p>
+					</div>
+					<div class="card">
+						<h3>🔐 Private by design</h3>
+						<p>
+							One-click OAuth connect. Your token stays on your device
+							and talks only to Notion — there is no server in the
+							middle.
+						</p>
+					</div>
+					<div class="card">
+						<h3>📁 Folder publishing</h3>
+						<p>
+							Push a single note or a whole project folder at once, with
+							scoped control over exactly what goes public.
+						</p>
+					</div>
+					<div class="card">
+						<h3>🧩 Rich block support</h3>
+						<p>
+							Headings, checklists, tables, callouts, toggles, code, and
+							deep nesting are preserved both ways.
+						</p>
+					</div>
+				</div>
+			</section>
+
+			<section>
+				<h2>How to install</h2>
+				<ol>
+					<li>
+						In Obsidian, open
+						<strong
+							>Settings → Community plugins → Browse</strong
+						>
+						and search <strong>“Notional”</strong>.
+					</li>
+					<li>Click Install, then Enable.</li>
+					<li>
+						Open <strong>Settings → Notional</strong>, paste a Notion API
+						token (or use one-click Connect with Notion), and create your
+						notes database.
+					</li>
+					<li>Open any note and hit <strong>Push</strong>. Done.</li>
+				</ol>
+				<p>
+					Full setup guide on the
+					<a href="https://github.com/bryanbans/Notional#readme"
+						>GitHub README</a
+					>.
+				</p>
+			</section>
+
+			<section>
+				<h2>Frequently asked questions</h2>
+				<details>
+					<summary>How do I sync Obsidian with Notion?</summary>
+					<p>
+						Install the Notional plugin from Obsidian's community plugin
+						browser, connect your Notion workspace with an API token or
+						one-click OAuth, then use the Push, Pull, and Sync commands on
+						any note. Notional handles Markdown-to-Notion conversion and
+						keeps both sides in sync.
+					</p>
+				</details>
+				<details>
+					<summary>Is Notional free and open source?</summary>
+					<p>
+						Yes. Notional is completely free and released under the GNU
+						GPL v3.0. The full source is on
+						<a href="https://github.com/bryanbans/Notional">GitHub</a>.
+					</p>
+				</details>
+				<details>
+					<summary>Does it do two-way sync, or just export?</summary>
+					<p>
+						True two-way sync. You can push Markdown notes to Notion and
+						pull Notion edits back into Obsidian. When both sides change,
+						Notional asks you which version to keep rather than guessing.
+					</p>
+				</details>
+				<details>
+					<summary>Is my data private?</summary>
+					<p>
+						Yes. Notional runs entirely on your device. Your notes and
+						Notion token never touch a third-party server — they go
+						directly from your machine to the Notion API. See the
+						<a href="privacy.html">privacy policy</a>.
+					</p>
+				</details>
+				<details>
+					<summary>What happens to my wiki-links and nested notes?</summary>
+					<p>
+						<code>[[wiki-links]]</code> are converted into clickable
+						Notion page mentions, and deeply nested outlines are uploaded
+						past Notion's per-call block limit — so your structure
+						survives the trip.
+					</p>
+				</details>
+			</section>
+		</div>
+
+		<footer>
+			Notional — a free, open-source Obsidian → Notion sync plugin ·
+			<a href="https://github.com/bryanbans/Notional">GitHub</a> ·
+			<a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a><br />
+			A maintained fork of Nobsidion. Released under GPL v3.0.
+		</footer>
+	</body>
+</html>

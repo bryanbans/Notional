@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/bryanbans/Notional/main/docs/assets/notional-logo-horizontal-dark-final.png" alt="Notional" width="520">
+  <img src="https://raw.githubusercontent.com/bryanbans/Notional/main/docs/assets/notional-logo-horizontal-dark-final.png" alt="Notional — two-way Obsidian to Notion sync plugin" width="520">
 </p>
 
 <h3 align="center">Write in Obsidian. Share in Notion. Stop copy‑pasting between them.</h3>
@@ -11,7 +11,7 @@
   <a href="manifest.json"><img src="https://img.shields.io/badge/Obsidian-1.13.0%2B-7c3aed" alt="Obsidian 1.13.0+"></a>
 </p>
 
-Notional is the missing bridge between the app where you *think* and the app where your team *works*. Draft in the speed and privacy of Obsidian, then send polished, fully‑formatted pages to Notion in one click — links intact, structure preserved, nothing overwritten by surprise.
+**Notional is a free, open-source Obsidian plugin for two-way Obsidian ↔ Notion sync.** It's the missing bridge between the app where you *think* and the app where your team *works*. Draft in the speed and privacy of Obsidian, then send polished, fully‑formatted pages to Notion in one click — links intact, structure preserved, nothing overwritten by surprise.
 
 ---
 
@@ -210,6 +210,26 @@ npm test
 ```
 
 Release assets are `main.js`, `manifest.json`, and `styles.css`. Tagging a commit whose name matches the `manifest.json` version (no `v` prefix) publishes a GitHub release with those assets and build-provenance attestations.
+
+## FAQ
+
+**How do I sync Obsidian with Notion?**
+Install Notional from Obsidian's **Community plugins → Browse** (search “Notional”), connect your Notion workspace with an API token or one-click OAuth, then use the **Push**, **Pull**, and **Sync** commands on any note. Notional converts Markdown to Notion blocks and keeps both sides in sync.
+
+**Does Notional do true two-way sync, or just export to Notion?**
+True two-way. Push Markdown notes to Notion *and* pull Notion edits back into Obsidian. When both sides changed, it asks you which version to keep instead of guessing.
+
+**Is Notional free and open source?**
+Yes — completely free, released under GPL v3.0, with full source on GitHub.
+
+**What happens to my `[[wiki-links]]` and nested notes?**
+Wiki-links become clickable Notion **page mentions**, and deeply nested outlines upload past Notion's per-call block limit, so your structure survives.
+
+**Is my data private?**
+Yes. Notional runs entirely on your device; your notes and Notion token go directly from your machine to the Notion API — never to a third-party server. See the [privacy policy](https://bryanbans.github.io/Notional/privacy.html).
+
+**How is Notional different from Nobsidion / obsidian-to-notion?**
+Notional is an actively maintained continuation with one-click OAuth connect, a conflict-aware sync panel, folder-level publishing, and timestamp-based Pull/Sync. See [Acknowledgements](#acknowledgements) for lineage.
 
 ## Acknowledgements
 
