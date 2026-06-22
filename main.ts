@@ -41,6 +41,9 @@ import {
 	buildNotionOAuthUrl,
 	completeNotionOAuth,
 	generateOAuthState,
+	hasNotionCredentials,
+	hasNotionToken,
+	isMatchingOAuthState,
 } from "./service/oauth";
 import { NObsidianSettingTab } from "settingTab";
 import {
@@ -200,7 +203,7 @@ export default class NObsidian extends Plugin {
 		if (!pendingState) {
 			return;
 		}
-		if (params.state && params.state !== pendingState) {
+		if (!isMatchingOAuthState(pendingState, params.state)) {
 			new Notice(
 				"The Notion callback did not match the pending request. Please connect again."
 			);
@@ -429,12 +432,11 @@ export default class NObsidian extends Plugin {
 	}
 
 	hasValidNotionCredentials() {
-		const { notionAPIToken, databaseID } = this.settings;
-		return notionAPIToken !== "" && databaseID !== "";
+		return hasNotionCredentials(this.settings);
 	}
 
 	hasValidNotionToken() {
-		return this.settings.notionAPIToken !== "";
+		return hasNotionToken(this.settings);
 	}
 
 	async uploadFile(file: TFile): Promise<ServiceResult> {

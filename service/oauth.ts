@@ -24,6 +24,28 @@ const errorResult = <T>(error: Error, data: unknown = null): ServiceResult<T> =>
 export const resolveNotionToken = (settings: PluginSettings): string =>
 	settings.notionOAuthAccessToken || settings.notionAPIToken;
 
+// Whether the user has any usable Notion bearer token. Gating in main.ts and
+// the sync panel must resolve the token the same way the API layer does, or an
+// OAuth-only user (no manual token) is wrongly treated as unauthenticated.
+export const hasNotionToken = (settings: PluginSettings): boolean =>
+	resolveNotionToken(settings).length > 0;
+
+// Full credentials for *uploading*: a token plus a destination database. Pull
+// and Sync of an already-linked note only need a token (see hasNotionToken).
+export const hasNotionCredentials = (settings: PluginSettings): boolean =>
+	hasNotionToken(settings) && settings.databaseID.length > 0;
+
+// CSRF guard for the OAuth redirect: the echoed state must be present and match
+// the value generated when the flow started. A missing state is rejected so a
+// forged callback cannot bypass the check simply by omitting it.
+export const isMatchingOAuthState = (
+	pendingState: string | null,
+	incomingState?: string | null
+): boolean =>
+	Boolean(pendingState) &&
+	Boolean(incomingState) &&
+	incomingState === pendingState;
+
 const BASE64URL_REPLACEMENTS: Record<string, string> = {
 	"+": "-",
 	"/": "_",

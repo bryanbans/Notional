@@ -7,6 +7,9 @@ import {
 	completeNotionOAuth,
 	extractNotionOAuthCode,
 	generateOAuthState,
+	hasNotionCredentials,
+	hasNotionToken,
+	isMatchingOAuthState,
 	resolveNotionToken,
 } from "../service/oauth";
 import { PluginSettings } from "../service/types";
@@ -107,6 +110,70 @@ describe("resolveNotionToken", () => {
 				notionAPIToken: "manual-token",
 			})
 		).toBe("manual-token");
+	});
+});
+
+describe("hasNotionToken / hasNotionCredentials", () => {
+	it("treats an OAuth-only connection as authenticated", () => {
+		const oauthOnly = {
+			...settings,
+			notionAPIToken: "",
+			notionOAuthAccessToken: "oauth-access-token",
+			databaseID: "db-id",
+		};
+		expect(hasNotionToken(oauthOnly)).toBe(true);
+		expect(hasNotionCredentials(oauthOnly)).toBe(true);
+	});
+
+	it("treats a pasted integration secret as authenticated", () => {
+		const manual = {
+			...settings,
+			notionAPIToken: "secret",
+			notionOAuthAccessToken: "",
+			databaseID: "db-id",
+		};
+		expect(hasNotionToken(manual)).toBe(true);
+		expect(hasNotionCredentials(manual)).toBe(true);
+	});
+
+	it("is unauthenticated when neither token is set", () => {
+		const none = {
+			...settings,
+			notionAPIToken: "",
+			notionOAuthAccessToken: "",
+		};
+		expect(hasNotionToken(none)).toBe(false);
+		expect(hasNotionCredentials(none)).toBe(false);
+	});
+
+	it("requires a database for full credentials but not for a bare token", () => {
+		const noDb = {
+			...settings,
+			notionAPIToken: "",
+			notionOAuthAccessToken: "oauth-access-token",
+			databaseID: "",
+		};
+		expect(hasNotionToken(noDb)).toBe(true);
+		expect(hasNotionCredentials(noDb)).toBe(false);
+	});
+});
+
+describe("isMatchingOAuthState", () => {
+	it("accepts an exact match", () => {
+		expect(isMatchingOAuthState("state-123", "state-123")).toBe(true);
+	});
+
+	it("rejects a mismatched state", () => {
+		expect(isMatchingOAuthState("state-123", "tampered")).toBe(false);
+	});
+
+	it("rejects a missing incoming state", () => {
+		expect(isMatchingOAuthState("state-123", undefined)).toBe(false);
+		expect(isMatchingOAuthState("state-123", "")).toBe(false);
+	});
+
+	it("rejects when nothing is pending", () => {
+		expect(isMatchingOAuthState(null, "state-123")).toBe(false);
 	});
 });
 

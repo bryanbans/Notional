@@ -195,6 +195,7 @@ obsidianLastSyncedAt: ...
 ### Good to know
 
 - Pull covers common blocks: paragraphs, headings, lists, to-dos, quotes, code, dividers, images, tables, callouts, toggles, equations, and media links.
+- Inline formatting (bold, italic, strikethrough, inline code) is reconstructed on Pull. Markdown has no portable underline or text-color syntax, so those Notion annotations are not represented.
 - Unsupported blocks are flagged with a `> [!missing]` callout — never dropped silently.
 - Automatic sync (opt-in) is scoped to the open note; conflicts are always deferred to the panel.
 - Conflict handling is side-based; there's no line-level merge UI yet.
@@ -249,7 +250,7 @@ Yes — completely free, released under GPL v3.0, with full source on GitHub.
 Wiki-links become clickable Notion **page mentions**, and deeply nested outlines upload past Notion's per-call block limit, so your structure survives.
 
 **Is my data private?**
-Yes. Notional runs entirely on your device; your notes and Notion token go directly from your machine to the Notion API — never to a third-party server. See the [privacy policy](https://bryanbans.github.io/Notional/privacy.html).
+Yes. Notional runs entirely on your device, and during normal operation your notes and Notion token go directly from your machine to the Notion API — there's no Notional-operated server in the middle. Credentials are stored locally in the plugin's settings (not in an OS credential vault). The one exception is opt-in: if *you* configure a custom OAuth token-exchange endpoint, the authorization code is sent there instead. See the [privacy policy](https://bryanbans.github.io/Notional/privacy.html).
 
 **Can I use Notional with AI agents like Claude, ChatGPT, or OpenClaw?**
 Yes — that's a sweet spot. Local agents (Claude Code, Hermes) work directly on your Obsidian Markdown, while cloud agents reach knowledge through Notion's API. Notional syncs the two, so you can publish AI-drafted notes from Obsidian to Notion, expose a scoped slice of your vault as an agent-readable "second brain," and pull agent edits back — without silent overwrites. See [Notional for AI agents](#notional-for-ai-agents).

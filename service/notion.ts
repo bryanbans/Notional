@@ -30,8 +30,11 @@ import {
 import { getNotionPageMentionId } from "./utils";
 import { resolveNotionToken } from "./oauth";
 
-// Notion requires every request to pin an API version. Keep this current with
-// the latest stable release: https://developers.notion.com/reference/versioning
+// Notion requires every request to pin an API version. This is intentionally
+// held at 2022-06-28: it is the version every push/pull path is tested against,
+// and the block-conversion code depends on its response shapes. Bumping it must
+// go through a migration branch with full regression coverage, not a one-line
+// edit. https://developers.notion.com/reference/versioning
 const NOTION_VERSION = "2022-06-28";
 const MAX_BLOCKS_PER_APPEND = 100;
 
@@ -276,15 +279,39 @@ const convertPageMentionLinks = (value: unknown): unknown => {
 	return convertedValue;
 };
 
+type NotionAnnotations = {
+	bold?: boolean;
+	italic?: boolean;
+	strikethrough?: boolean;
+	underline?: boolean;
+	code?: boolean;
+};
+
+// Reproduce Notion's inline formatting in Markdown. Code is wrapped innermost so
+// `**`code`**` nests correctly. Markdown has no portable underline or
+// text-color syntax, so those annotations are intentionally not represented
+// (documented as a known limitation in the README).
+const applyAnnotations = (text: string, annotations: unknown): string => {
+	if (!text.trim()) return text;
+
+	const flags = annotations as NotionAnnotations | undefined;
+	if (!flags) return text;
+
+	let result = text;
+	if (flags.code) result = `\`${result}\``;
+	if (flags.bold) result = `**${result}**`;
+	if (flags.italic) result = `*${result}*`;
+	if (flags.strikethrough) result = `~~${result}~~`;
+	return result;
+};
+
 const richTextToMarkdown = (richText: NotionRichText[] = []): string => {
 	return richText
 		.map((text) => {
 			const plainText = text.plain_text || text.text?.content || "";
-			if (text.href) return `[${plainText}](${text.href})`;
-			if (text.text?.link?.url) {
-				return `[${plainText}](${text.text.link.url})`;
-			}
-			return plainText;
+			const decorated = applyAnnotations(plainText, text.annotations);
+			const url = text.href || text.text?.link?.url;
+			return url ? `[${decorated}](${url})` : decorated;
 		})
 		.join("");
 };
@@ -739,30 +766,40 @@ const clearPageContent = async (
 	notionPageId: string
 ): Promise<ServiceResult<string | null>> => {
 	try {
-		// Retrieve the list of block children for the given page ID
-		const listResponse = await notionRequest({
-			url: `https://api.notion.com/v1/blocks/${notionPageId}/children`,
-			method: "GET",
-			headers: {
-				...getAuthHeaders(settings),
-			},
-		});
+		// Collect every top-level block ID first. Notion returns at most 100
+		// children per request, so a page with more than 100 blocks must be
+		// paged through — otherwise the un-listed blocks survive the clear and
+		// the new upload is appended on top of stale content.
+		const blockIds: string[] = [];
+		let startCursor: string | null = null;
 
-		// Check if the response contains blocks and delete them if it does
-		const json = listResponse.json as
-			| { results?: { id?: string }[] }
-			| undefined;
-		if (json?.results) {
-			for (const block of json.results) {
-				// Each block has an ID, which you can use to delete it
-				await notionRequest({
-					url: `https://api.notion.com/v1/blocks/${block.id ?? ""}`,
-					method: "DELETE",
-					headers: {
-						...getAuthHeaders(settings),
-					},
-				});
+		do {
+			const cursorQuery = startCursor
+				? `?start_cursor=${encodeURIComponent(startCursor)}`
+				: "";
+			const listResponse = await notionRequest({
+				url: `https://api.notion.com/v1/blocks/${notionPageId}/children${cursorQuery}`,
+				method: "GET",
+				headers: {
+					...getAuthHeaders(settings),
+				},
+			});
+
+			const json = listResponse.json as BlockChildrenResponse | undefined;
+			for (const block of json?.results ?? []) {
+				if (block.id) blockIds.push(block.id);
 			}
+			startCursor = json?.has_more ? json.next_cursor ?? null : null;
+		} while (startCursor);
+
+		for (const blockId of blockIds) {
+			await notionRequest({
+				url: `https://api.notion.com/v1/blocks/${blockId}`,
+				method: "DELETE",
+				headers: {
+					...getAuthHeaders(settings),
+				},
+			});
 		}
 
 		return {

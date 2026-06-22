@@ -119,6 +119,47 @@ describe("notion.uploadFileContent", () => {
 		expect(patchBodies[1].children).toHaveLength(1);
 	});
 
+	it("clears blocks across every page before re-uploading (pagination)", async () => {
+		(markdownToBlocks as jest.Mock).mockReturnValue([]);
+		const deletedIds: string[] = [];
+
+		(requestUrl as jest.Mock).mockImplementation((options) => {
+			if (options.method === "GET") {
+				if (String(options.url).includes("start_cursor")) {
+					return Promise.resolve({
+						json: {
+							results: [{ id: "b2" }],
+							has_more: false,
+							next_cursor: null,
+						},
+					});
+				}
+				return Promise.resolve({
+					json: {
+						results: [{ id: "b1" }],
+						has_more: true,
+						next_cursor: "cursor-2",
+					},
+				});
+			}
+			if (options.method === "DELETE") {
+				deletedIds.push(String(options.url));
+				return Promise.resolve({ json: {} });
+			}
+			return Promise.resolve({ json: { results: [] } });
+		});
+
+		const result = await notion.uploadFileContent(
+			settings,
+			"page-id",
+			""
+		);
+
+		expect(result.error).toBeNull();
+		expect(deletedIds.some((url) => url.endsWith("/blocks/b1"))).toBe(true);
+		expect(deletedIds.some((url) => url.endsWith("/blocks/b2"))).toBe(true);
+	});
+
 	it("converts internal page mention marker links into Notion mention rich text", async () => {
 		(markdownToBlocks as jest.Mock).mockReturnValue([
 			{
@@ -464,6 +505,64 @@ describe("notion.retrievePageMarkdown rich blocks", () => {
 		expect(result.data.markdown).toContain("> [!note] Note text");
 		expect(result.data.markdown).toContain("$$x^2$$");
 		expect(result.data.markdown).not.toContain("[!missing]");
+	});
+
+	it("reconstructs bold, italic, strikethrough, and inline code annotations", async () => {
+		(requestUrl as jest.Mock)
+			.mockResolvedValueOnce({
+				json: { id: "page-id", last_edited_time: "2024-01-01T00:00:00.000Z" },
+			})
+			.mockResolvedValueOnce({
+				json: {
+					results: [
+						{
+							id: "p",
+							type: "paragraph",
+							has_children: false,
+							paragraph: {
+								rich_text: [
+									{ plain_text: "bold", annotations: { bold: true } },
+									{ plain_text: " and ", annotations: {} },
+									{ plain_text: "italic", annotations: { italic: true } },
+									{ plain_text: " and ", annotations: {} },
+									{
+										plain_text: "struck",
+										annotations: { strikethrough: true },
+									},
+									{ plain_text: " and ", annotations: {} },
+									{ plain_text: "code", annotations: { code: true } },
+								],
+							},
+						},
+						{
+							id: "lp",
+							type: "paragraph",
+							has_children: false,
+							paragraph: {
+								rich_text: [
+									{
+										plain_text: "bold link",
+										href: "https://example.com",
+										annotations: { bold: true },
+									},
+								],
+							},
+						},
+					],
+					has_more: false,
+					next_cursor: null,
+				},
+			});
+
+		const result = await notion.retrievePageMarkdown(settings, "page-id");
+
+		expect(result.error).toBeNull();
+		expect(result.data.markdown).toContain(
+			"**bold** and *italic* and ~~struck~~ and `code`"
+		);
+		expect(result.data.markdown).toContain(
+			"[**bold link**](https://example.com)"
+		);
 	});
 
 	it("converts a table block into a markdown table", async () => {
