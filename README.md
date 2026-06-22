@@ -122,6 +122,18 @@ Open any note and **Push** it (ribbon icon, the **Open sync panel** command, or 
 
 ---
 
+## Notional for AI agents
+
+The new wave of AI assistants splits along a line. **Local agents** — Claude Code, Hermes, and friends — read and write the plain Markdown in your vault. **Cloud agents** — OpenClaw, plus the Notion connectors now built into Claude and ChatGPT — reach your knowledge through Notion's API. Obsidian has no official cloud API; Notion does. **Notional is the bridge that lets both halves work from the same notes.**
+
+- 🧠 **Turn your vault into an agent-readable "second brain."** Push the folders you choose to Notion, and any Notion-aware agent can suddenly search and cite your notes — without exposing your whole vault. Scoped, folder-level publishing means *you* decide exactly what the AI can see.
+- 📥 **Close the mobile capture loop.** A Discord or Telegram agent dumps research, links, and ideas into Notion while you're away from your desk; **Pull** brings them home into the vault where you do deep work. Draft on desktop, push to Notion, then talk to the same notes from your phone.
+- 🤖 **Publish what your local agent writes.** Let Claude Code or Hermes draft research and summaries as Markdown in Obsidian, then Notional pushes them to Notion as clean, formatted pages your team — or your *next* agent — can act on. Markdown stays the source of truth, and you **Pull** their edits back when you're ready.
+- 📊 **Feed structured data to analysis agents.** Keep journals, trackers, and tables as Markdown in your vault, push them into a Notion database, and point a read-only agent at it for pattern-finding — a trade journal, a reading log, an experiment tracker. You keep authorship in Obsidian; the agent just reads.
+- 🛟 **Safe by default when agents edit.** If an AI changes a page in Notion *and* you've changed the same note locally, Notional stops and asks instead of silently overwriting — so handing pages to agents never quietly costs you work. Credentials stay on your device; there's no Notional server in the loop.
+
+---
+
 <details>
 <summary><strong>Under the hood</strong> (for the curious / contributors)</summary>
 
@@ -227,6 +239,9 @@ Wiki-links become clickable Notion **page mentions**, and deeply nested outlines
 
 **Is my data private?**
 Yes. Notional runs entirely on your device; your notes and Notion token go directly from your machine to the Notion API — never to a third-party server. See the [privacy policy](https://bryanbans.github.io/Notional/privacy.html).
+
+**Can I use Notional with AI agents like Claude, ChatGPT, or OpenClaw?**
+Yes — that's a sweet spot. Local agents (Claude Code, Hermes) work directly on your Obsidian Markdown, while cloud agents reach knowledge through Notion's API. Notional syncs the two, so you can publish AI-drafted notes from Obsidian to Notion, expose a scoped slice of your vault as an agent-readable "second brain," and pull agent edits back — without silent overwrites. See [Notional for AI agents](#notional-for-ai-agents).
 
 **How is Notional different from Nobsidion / obsidian-to-notion?**
 Notional is an actively maintained continuation with one-click OAuth connect, a conflict-aware sync panel, folder-level publishing, and timestamp-based Pull/Sync. See [Acknowledgements](#acknowledgements) for lineage.
