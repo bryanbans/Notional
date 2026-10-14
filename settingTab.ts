@@ -29,7 +29,7 @@ import NObsidian from "main";
 import { PluginSettings, StringKeys, BooleanKeys } from "./service/types";
 import notion from "./service/notion";
 import { resolveNotionToken } from "./service/oauth";
-import { extractNotionId } from "./service/utils";
+import { extractNotionId, PUSH_ONLY } from "./service/utils";
 
 export class NObsidianSettingTab extends PluginSettingTab {
 	plugin: NObsidian;
@@ -66,7 +66,7 @@ export class NObsidianSettingTab extends PluginSettingTab {
 	private renderSettings(containerEl: HTMLElement): void {
 		this.renderConnectSection(containerEl);
 		this.renderDatabaseSection(containerEl);
-		this.renderAutoSyncSection(containerEl);
+		if (!PUSH_ONLY) this.renderAutoSyncSection(containerEl);
 		this.renderAdvancedSection(containerEl);
 	}
 

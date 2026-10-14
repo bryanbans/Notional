@@ -218,6 +218,244 @@ describe("notion.uploadFileContent", () => {
 	});
 });
 
+describe("notion.uploadImage", () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
+	it("creates a file upload and sends the bytes as multipart", async () => {
+		(requestUrl as jest.Mock)
+			.mockResolvedValueOnce({ status: 200, json: { id: "fu-1" } })
+			.mockResolvedValueOnce({ status: 200, json: { status: "uploaded" } });
+
+		const result = await notion.uploadImage(
+			settings,
+			"a.png",
+			"image/png",
+			new Uint8Array([1, 2, 3]).buffer
+		);
+
+		expect(result).toEqual({ data: "fu-1", error: null });
+		const [[create], [send]] = (requestUrl as jest.Mock).mock.calls;
+		expect(create.url).toBe("https://api.notion.com/v1/file_uploads");
+		expect(JSON.parse(create.body)).toEqual({
+			filename: "a.png",
+			content_type: "image/png",
+		});
+		expect(send.url).toBe(
+			"https://api.notion.com/v1/file_uploads/fu-1/send"
+		);
+		expect(send.contentType).toMatch(/^multipart\/form-data; boundary=/);
+		const body = new TextDecoder().decode(send.body);
+		expect(body).toContain('name="file"; filename="a.png"');
+		expect(body).toContain("Content-Type: image/png");
+	});
+
+	it("returns an error when Notion does not finish the upload", async () => {
+		(requestUrl as jest.Mock)
+			.mockResolvedValueOnce({ status: 200, json: { id: "fu-1" } })
+			.mockResolvedValueOnce({ status: 200, json: { status: "pending" } });
+
+		const result = await notion.uploadImage(
+			settings,
+			"a.png",
+			"image/png",
+			new ArrayBuffer(1)
+		);
+
+		expect(result.data).toBeNull();
+		expect(result.error?.message).toContain("upload status pending");
+	});
+});
+
+describe("notion.uploadFileContent file upload images", () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		(requestUrl as jest.Mock).mockImplementation((options) =>
+			Promise.resolve({
+				json:
+					options.method === "GET"
+						? { results: [] }
+						: { results: [{ id: "block-1" }] },
+			})
+		);
+	});
+
+	it("turns file upload marker images into file_upload image blocks", async () => {
+		(markdownToBlocks as jest.Mock).mockReturnValue([
+			{
+				object: "block",
+				type: "image",
+				image: {
+					type: "external",
+					external: {
+						url: "https://notional.invalid/file-upload/fu-1.png",
+					},
+				},
+			},
+			{
+				object: "block",
+				type: "image",
+				image: {
+					type: "external",
+					external: { url: "https://example.com/remote.png" },
+				},
+			},
+		]);
+
+		const result = await notion.uploadFileContent(settings, "page-id", "x");
+
+		expect(result.error).toBeNull();
+		const [body] = getPatchBodies();
+		expect(body.children[0].image).toEqual({
+			type: "file_upload",
+			file_upload: { id: "fu-1" },
+		});
+		expect(body.children[1].image.external.url).toBe(
+			"https://example.com/remote.png"
+		);
+	});
+});
+
+describe("notion.uploadFileContent Obsidian syntax", () => {
+	const text = (content: string, annotations = {}) => ({
+		type: "text",
+		annotations,
+		text: { content },
+	});
+
+	beforeEach(() => {
+		jest.clearAllMocks();
+		(requestUrl as jest.Mock).mockImplementation((options) =>
+			Promise.resolve({
+				json:
+					options.method === "GET"
+						? { results: [] }
+						: { results: [{ id: "block-1" }] },
+			})
+		);
+	});
+
+	it("turns [!type] quotes into Notion callouts", async () => {
+		(markdownToBlocks as jest.Mock).mockReturnValue([
+			{
+				object: "block",
+				type: "quote",
+				quote: {
+					rich_text: [text("")],
+					children: [
+						{
+							object: "block",
+							type: "paragraph",
+							paragraph: {
+								rich_text: [
+									text("[!warning] Careful\nBody "),
+									text("bold", { bold: true }),
+								],
+							},
+						},
+					],
+				},
+			},
+			{
+				object: "block",
+				type: "quote",
+				quote: {
+					rich_text: [text("")],
+					children: [
+						{
+							object: "block",
+							type: "paragraph",
+							paragraph: { rich_text: [text("plain quote")] },
+						},
+					],
+				},
+			},
+		]);
+
+		await notion.uploadFileContent(settings, "page-id", "x");
+
+		const [body] = getPatchBodies();
+		expect(body.children[0].type).toBe("callout");
+		expect(body.children[0].callout).toEqual({
+			rich_text: [
+				{
+					type: "text",
+					text: { content: "Careful" },
+					annotations: { bold: true },
+				},
+				{ type: "text", text: { content: "\n" } },
+				text("Body "),
+				text("bold", { bold: true }),
+			],
+			icon: { type: "emoji", emoji: "⚠️" },
+			color: "yellow_background",
+		});
+		expect(body.children[1].type).toBe("quote");
+	});
+
+	it("uses the callout type as title and keeps extra paragraphs as children", async () => {
+		(markdownToBlocks as jest.Mock).mockReturnValue([
+			{
+				object: "block",
+				type: "quote",
+				quote: {
+					rich_text: [text("")],
+					children: [
+						paragraph("[!note]"),
+						paragraph("Second paragraph"),
+					],
+				},
+			},
+		]);
+
+		await notion.uploadFileContent(settings, "page-id", "x");
+
+		const [body] = getPatchBodies();
+		expect(body.children[0].callout.rich_text).toEqual([
+			{
+				type: "text",
+				text: { content: "Note" },
+				annotations: { bold: true },
+			},
+		]);
+		expect(body.children[0].callout.children).toEqual([
+			paragraph("Second paragraph"),
+		]);
+	});
+
+	it("turns ==highlights== into yellow background text outside code", async () => {
+		(markdownToBlocks as jest.Mock).mockReturnValue([
+			{
+				object: "block",
+				type: "paragraph",
+				paragraph: {
+					rich_text: [
+						text("a ==b== c", { italic: true }),
+						text("==keep==", { code: true }),
+					],
+				},
+			},
+			{
+				object: "block",
+				type: "code",
+				code: { rich_text: [text("x ==y==")], language: "js" },
+			},
+		]);
+
+		await notion.uploadFileContent(settings, "page-id", "x");
+
+		const [body] = getPatchBodies();
+		expect(body.children[0].paragraph.rich_text).toEqual([
+			text("a ", { italic: true }),
+			text("b", { italic: true, color: "yellow_background" }),
+			text(" c", { italic: true }),
+			text("==keep==", { code: true }),
+		]);
+		expect(body.children[1].code.rich_text).toEqual([text("x ==y==")]);
+	});
+});
+
 describe("notion.retrievePageMarkdown", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();

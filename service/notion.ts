@@ -27,7 +27,7 @@ import {
 	PluginSettings,
 	ServiceResult,
 } from "./types";
-import { getNotionPageMentionId } from "./utils";
+import { getFileUploadImageId, getNotionPageMentionId } from "./utils";
 import { resolveNotionToken } from "./oauth";
 
 // Notion requires every request to pin an API version. This is intentionally
@@ -277,6 +277,248 @@ const convertPageMentionLinks = (value: unknown): unknown => {
 	}
 
 	return convertedValue;
+};
+
+// Swap image blocks that point at a File Upload marker URL for file_upload
+// images (see createFileUploadImageUrl).
+const convertFileUploadImages = (value: unknown): unknown => {
+	if (Array.isArray(value)) {
+		return value.map(convertFileUploadImages);
+	}
+
+	if (!value || typeof value !== "object") return value;
+
+	const record = value as Record<string, unknown>;
+	const image = record.image as { external?: { url?: string } } | undefined;
+	const fileUploadId =
+		record.type === "image"
+			? getFileUploadImageId(image?.external?.url || "")
+			: null;
+	if (fileUploadId) {
+		return {
+			...record,
+			image: { type: "file_upload", file_upload: { id: fileUploadId } },
+		};
+	}
+
+	const convertedValue: Record<string, unknown> = { ...record };
+	for (const key of Object.keys(convertedValue)) {
+		convertedValue[key] = convertFileUploadImages(convertedValue[key]);
+	}
+
+	return convertedValue;
+};
+
+type RichTextItem = {
+	type?: string;
+	text?: { content: string; link?: unknown };
+	annotations?: Record<string, unknown>;
+	plain_text?: string;
+};
+
+const HIGHLIGHT_REGEX = /==([^=\n]+)==/g;
+
+// Obsidian ==highlight== -> Notion yellow background.
+const splitHighlights = (richText: RichTextItem[]): RichTextItem[] =>
+	richText.flatMap((item) => {
+		const content = item.text?.content;
+		if (
+			item.type !== "text" ||
+			!content?.includes("==") ||
+			item.annotations?.code
+		)
+			return [item];
+
+		const pieces: RichTextItem[] = [];
+		let lastIndex = 0;
+		const piece = (text: string, highlighted: boolean) => {
+			if (!text) return;
+			pieces.push({
+				...item,
+				text: { ...item.text, content: text },
+				annotations: highlighted
+					? { ...item.annotations, color: "yellow_background" }
+					: item.annotations,
+			});
+		};
+		for (const match of content.matchAll(HIGHLIGHT_REGEX)) {
+			const index = match.index ?? 0;
+			piece(content.slice(lastIndex, index), false);
+			piece(match[1], true);
+			lastIndex = index + match[0].length;
+		}
+		piece(content.slice(lastIndex), false);
+		return pieces;
+	});
+
+const CALLOUT_REGEX = /^\[!([\w-]+)\][+-]?[ \t]*([^\n]*)\n?/;
+
+const CALLOUT_STYLES: Record<string, { emoji: string; color: string }> = {
+	note: { emoji: "📝", color: "blue_background" },
+	info: { emoji: "ℹ️", color: "blue_background" },
+	todo: { emoji: "☑️", color: "blue_background" },
+	abstract: { emoji: "📄", color: "gray_background" },
+	summary: { emoji: "📄", color: "gray_background" },
+	tldr: { emoji: "📄", color: "gray_background" },
+	tip: { emoji: "💡", color: "green_background" },
+	hint: { emoji: "💡", color: "green_background" },
+	important: { emoji: "❗", color: "purple_background" },
+	success: { emoji: "✅", color: "green_background" },
+	check: { emoji: "✅", color: "green_background" },
+	done: { emoji: "✅", color: "green_background" },
+	question: { emoji: "❓", color: "yellow_background" },
+	help: { emoji: "❓", color: "yellow_background" },
+	faq: { emoji: "❓", color: "yellow_background" },
+	warning: { emoji: "⚠️", color: "yellow_background" },
+	caution: { emoji: "⚠️", color: "yellow_background" },
+	attention: { emoji: "⚠️", color: "yellow_background" },
+	failure: { emoji: "❌", color: "red_background" },
+	fail: { emoji: "❌", color: "red_background" },
+	missing: { emoji: "❌", color: "red_background" },
+	danger: { emoji: "⛔", color: "red_background" },
+	error: { emoji: "⛔", color: "red_background" },
+	bug: { emoji: "🐞", color: "red_background" },
+	example: { emoji: "📋", color: "purple_background" },
+	quote: { emoji: "💬", color: "gray_background" },
+	cite: { emoji: "💬", color: "gray_background" },
+};
+
+// Martian turns "> [!type] Title\n> body" into a quote whose first child
+// paragraph starts with "[!type]". Rebuild it as a Notion callout.
+const quoteToCallout = (
+	record: Record<string, unknown>
+): Record<string, unknown> | null => {
+	const quote = record.quote as
+		| { children?: Record<string, unknown>[] }
+		| undefined;
+	const [first, ...rest] = quote?.children ?? [];
+	const paragraph = first?.paragraph as
+		| { rich_text?: RichTextItem[] }
+		| undefined;
+	const [head, ...tail] = paragraph?.rich_text ?? [];
+	const match = head?.text?.content.match(CALLOUT_REGEX);
+	if (first?.type !== "paragraph" || !head?.text || !match) return null;
+
+	const type = match[1].toLowerCase();
+	const style = CALLOUT_STYLES[type] ?? CALLOUT_STYLES.note;
+	const title = match[2].trim() || type[0].toUpperCase() + type.slice(1);
+	const headRest = head.text.content.slice(match[0].length);
+	const body = [
+		...(headRest
+			? [{ ...head, text: { ...head.text, content: headRest } }]
+			: []),
+		...tail,
+	];
+
+	return {
+		object: "block",
+		type: "callout",
+		callout: {
+			rich_text: [
+				{
+					type: "text",
+					text: { content: title },
+					annotations: { bold: true },
+				},
+				...(body.length
+					? [{ type: "text", text: { content: "\n" } }, ...body]
+					: []),
+			],
+			icon: { type: "emoji", emoji: style.emoji },
+			color: style.color,
+			...(rest.length ? { children: rest } : {}),
+		},
+	};
+};
+
+// Obsidian-only markdown that Martian passes through as text: callouts and
+// ==highlights==. Code blocks are left untouched.
+const convertObsidianSyntax = (value: unknown): unknown => {
+	if (Array.isArray(value)) {
+		return value.map(convertObsidianSyntax);
+	}
+
+	if (!value || typeof value !== "object") return value;
+
+	let record = value as Record<string, unknown>;
+	if (record.type === "code") return record;
+	if (record.type === "quote") record = quoteToCallout(record) ?? record;
+
+	const convertedValue: Record<string, unknown> = { ...record };
+	for (const key of Object.keys(convertedValue)) {
+		convertedValue[key] =
+			key === "rich_text" && Array.isArray(convertedValue[key])
+				? splitHighlights(convertedValue[key] as RichTextItem[])
+				: convertObsidianSyntax(convertedValue[key]);
+	}
+
+	return convertedValue;
+};
+
+const buildMultipartBody = (
+	boundary: string,
+	filename: string,
+	contentType: string,
+	data: ArrayBuffer
+): ArrayBuffer => {
+	const encoder = new TextEncoder();
+	const head = encoder.encode(
+		`--${boundary}\r\n` +
+			`Content-Disposition: form-data; name="file"; filename="${filename.replace(/["\r\n]/g, "_")}"\r\n` +
+			`Content-Type: ${contentType}\r\n\r\n`
+	);
+	const tail = encoder.encode(`\r\n--${boundary}--\r\n`);
+
+	const body = new Uint8Array(head.length + data.byteLength + tail.length);
+	body.set(head, 0);
+	body.set(new Uint8Array(data), head.length);
+	body.set(tail, head.length + data.byteLength);
+	return body.buffer;
+};
+
+/**
+ * Upload a file with Notion's single-part File Upload API.
+ *
+ * @returns The file upload ID to reference from a block.
+ */
+const uploadImage = async (
+	settings: PluginSettings,
+	filename: string,
+	contentType: string,
+	data: ArrayBuffer
+): Promise<ServiceResult<string | null>> => {
+	try {
+		const created = await notionRequest({
+			url: "https://api.notion.com/v1/file_uploads",
+			method: "POST",
+			headers: {
+				...getJsonHeaders(settings),
+			},
+			body: JSON.stringify({ filename, content_type: contentType }),
+		});
+		const fileUploadId = (created.json as { id?: string } | undefined)?.id;
+		if (!fileUploadId) throw Error("Notion did not return a file upload ID");
+
+		const boundary = `----NotionalBoundary${Date.now().toString(16)}`;
+		const sent = await notionRequest({
+			url: `https://api.notion.com/v1/file_uploads/${fileUploadId}/send`,
+			method: "POST",
+			headers: {
+				...getAuthHeaders(settings),
+			},
+			contentType: `multipart/form-data; boundary=${boundary}`,
+			body: buildMultipartBody(boundary, filename, contentType, data),
+		});
+		const status = (sent.json as { status?: string } | undefined)?.status;
+		if (status !== "uploaded") throw Error(`upload status ${status}`);
+
+		return { data: fileUploadId, error: null };
+	} catch (error) {
+		return errorResult(
+			null,
+			Error(`Error uploading ${filename} to Notion: ${error}`)
+		);
+	}
 };
 
 type NotionAnnotations = {
@@ -745,8 +987,10 @@ const addContentToPage = async (
 ): Promise<ServiceResult> => {
 	let res: RequestUrlResponse | null = null;
 
-	const blocks = convertPageMentionLinks(
-		markdownToBlocks(content)
+	const blocks = convertObsidianSyntax(
+		convertFileUploadImages(
+			convertPageMentionLinks(markdownToBlocks(content))
+		)
 	) as NotionBlock[];
 
 	try {
@@ -841,6 +1085,7 @@ const notion = {
 	retrievePage,
 	retrievePageMarkdown,
 	uploadFileContent,
+	uploadImage,
 };
 
 export default notion;

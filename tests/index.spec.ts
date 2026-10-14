@@ -7,6 +7,8 @@ import {
 	initializeNotionPage,
 	pullFileFromNotion,
 	runWithConcurrency,
+	uploadLocalImages,
+	MAX_IMAGE_UPLOAD_BYTES,
 } from "../service/index";
 import notion from "../service/notion";
 
@@ -119,9 +121,40 @@ describe("convertObsidianLinks", () => {
 		fileMock = new TFile();
 		fileMock.basename = "Linked note";
 		fileMock.path = "Linked note.md";
+		fileMock.extension = "md";
 		(pluginMock.getLinkedMarkdownFile as jest.Mock).mockReturnValue(
 			fileMock
 		);
+	});
+
+	it("keeps only the display text for notes not yet pushed", async () => {
+		(pluginMock.getContent as jest.Mock).mockResolvedValueOnce({
+			__content: "",
+		});
+
+		const result = await convertObsidianLinks(
+			pluginMock,
+			fileMock,
+			"See [[Private note|that note]]."
+		);
+
+		expect(result).toBe("See that note.");
+		expect(notion.createEmptyPage).not.toHaveBeenCalled();
+		expect(pluginMock.updateMarkdownFile).not.toHaveBeenCalled();
+	});
+
+	it("never creates vault files for missing link targets", async () => {
+		(pluginMock.getLinkedMarkdownFile as jest.Mock).mockReturnValue(null);
+
+		const result = await convertObsidianLinks(
+			pluginMock,
+			fileMock,
+			"See [[Missing note]] and ![[Embedded note]]."
+		);
+
+		expect(result).toBe("See Missing note and Embedded note.");
+		expect(pluginMock.createEmptyMarkdownFile).not.toHaveBeenCalled();
+		expect(notion.createEmptyPage).not.toHaveBeenCalled();
 	});
 
 	it("converts wiki-links into Notion page mention markers", async () => {
@@ -139,6 +172,107 @@ describe("convertObsidianLinks", () => {
 			fileMock.path
 		);
 		expect(pluginMock.createEmptyMarkdownFile).not.toHaveBeenCalled();
+	});
+});
+
+describe("uploadLocalImages", () => {
+	let pluginMock: NObsidian;
+	let noteMock: TFile;
+
+	const makeFile = (name: string, size = 100): TFile => {
+		const file = new TFile();
+		file.name = name;
+		file.path = `assets/${name}`;
+		file.extension = name.split(".").pop() ?? "";
+		file.stat = { ctime: 0, mtime: 0, size };
+		return file;
+	};
+
+	beforeEach(() => {
+		jest.clearAllMocks();
+		pluginMock = new NObsidian(new App(), {} as PluginManifest);
+		noteMock = new TFile();
+		noteMock.path = "Note.md";
+		(notion.uploadImage as jest.Mock).mockResolvedValue({
+			data: "upload-1",
+			error: null,
+		});
+	});
+
+	it("uploads embedded and relative images once each", async () => {
+		const image = makeFile("diagram.png");
+		(pluginMock.getLinkedMarkdownFile as jest.Mock).mockReturnValue(image);
+
+		const result = await uploadLocalImages(
+			pluginMock,
+			noteMock,
+			"![[diagram.png|300]]\n![Diagram](<assets/diagram.png>)"
+		);
+
+		expect(result.markdown).toBe(
+			"![](https://notional.invalid/file-upload/upload-1.png)\n" +
+				"![Diagram](https://notional.invalid/file-upload/upload-1.png)"
+		);
+		expect(result.skipped).toEqual([]);
+		expect(notion.uploadImage).toHaveBeenCalledTimes(1);
+		expect(notion.uploadImage).toHaveBeenCalledWith(
+			pluginMock.settings,
+			"diagram.png",
+			"image/png",
+			expect.any(ArrayBuffer)
+		);
+		expect(pluginMock.getLinkedMarkdownFile).toHaveBeenCalledWith(
+			"assets/diagram.png",
+			"Note.md"
+		);
+	});
+
+	it("leaves remote images and note embeds untouched", async () => {
+		const note = makeFile("Other.md");
+		(pluginMock.getLinkedMarkdownFile as jest.Mock).mockReturnValue(note);
+		const markdown = "![x](https://example.com/a.png) ![[Other]]";
+
+		const result = await uploadLocalImages(pluginMock, noteMock, markdown);
+
+		expect(result.markdown).toBe(markdown);
+		expect(notion.uploadImage).not.toHaveBeenCalled();
+	});
+
+	it("skips images over the size limit and unsupported files", async () => {
+		(pluginMock.getLinkedMarkdownFile as jest.Mock)
+			.mockReturnValueOnce(
+				makeFile("big.png", MAX_IMAGE_UPLOAD_BYTES + 1)
+			)
+			.mockReturnValueOnce(makeFile("deck.pdf"));
+
+		const result = await uploadLocalImages(
+			pluginMock,
+			noteMock,
+			"![[big.png]] ![[deck.pdf]]"
+		);
+
+		expect(result.markdown).toBe("big.png deck.pdf");
+		expect(result.skipped).toEqual(["big.png", "deck.pdf"]);
+		expect(notion.uploadImage).not.toHaveBeenCalled();
+	});
+
+	it("falls back to text when the upload fails", async () => {
+		(pluginMock.getLinkedMarkdownFile as jest.Mock).mockReturnValue(
+			makeFile("a.png")
+		);
+		(notion.uploadImage as jest.Mock).mockResolvedValue({
+			data: null,
+			error: Error("boom"),
+		});
+
+		const result = await uploadLocalImages(
+			pluginMock,
+			noteMock,
+			"![Alt](a.png)"
+		);
+
+		expect(result.markdown).toBe("Alt");
+		expect(result.skipped).toEqual(["a.png"]);
 	});
 });
 

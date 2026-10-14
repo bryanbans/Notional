@@ -49,6 +49,7 @@ import { NObsidianSettingTab } from "settingTab";
 import {
 	NoticeMessageConfig,
 	parseFrontMatter,
+	PUSH_ONLY,
 } from "service/utils";
 import {
 	pullFileFromNotion,
@@ -128,7 +129,7 @@ export default class NObsidian extends Plugin {
 		this.addCustomCommands();
 
 		// Wire up optional automatic background sync.
-		this.registerAutoSync();
+		if (!PUSH_ONLY) this.registerAutoSync();
 
 		// Add settings tab to plugin (before optional wiring, so a failure in
 		// later registration can never leave the settings pane blank).
@@ -261,6 +262,16 @@ export default class NObsidian extends Plugin {
 		});
 
 		this.addCommand({
+			id: "open-sync-panel",
+			name: "Open sync panel",
+			callback: () => {
+				void this.activateSyncView();
+			},
+		});
+
+		if (PUSH_ONLY) return;
+
+		this.addCommand({
 			id: "bulk-share-to-notion",
 			name: "Upload current folder to Notion",
 			callback: async () => {
@@ -281,14 +292,6 @@ export default class NObsidian extends Plugin {
 			name: "Sync current note with Notion",
 			editorCallback: async () => {
 				void this.syncCurrentNote();
-			},
-		});
-
-		this.addCommand({
-			id: "open-sync-panel",
-			name: "Open sync panel",
-			callback: () => {
-				void this.activateSyncView();
 			},
 		});
 	}
@@ -449,6 +452,10 @@ export default class NObsidian extends Plugin {
 		const content = await this.app.vault.read(file);
 		const contentWithFrontMatter = parseFrontMatter(content);
 		return contentWithFrontMatter;
+	}
+
+	async readBinary(file: TFile): Promise<ArrayBuffer> {
+		return this.app.vault.readBinary(file);
 	}
 
 	async createEmptyMarkdownFile(pageName: string): Promise<TFile> {

@@ -42,6 +42,8 @@ class NObsidian {
 
 	getLinkedMarkdownFile = jest.fn();
 
+	readBinary = jest.fn().mockResolvedValue(new ArrayBuffer(8));
+
 	updateMarkdownFile = jest.fn();
 }
 

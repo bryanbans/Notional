@@ -1,4 +1,4 @@
-import { TFile } from "obsidian";
+import { Notice, TFile } from "obsidian";
 import NObsidian from "main";
 import {
 	MarkdownWithFrontMatter,
@@ -12,8 +12,10 @@ import {
 	updateNotionPageUrlWithWorkspaceId,
 	fromYamlFrontMatterToMarkdown,
 	createNotionPageMentionUrl,
+	createFileUploadImageUrl,
 	getWikiLinksFromMarkdown,
 	replaceWikiWithHyperLink,
+	replaceWikiWithText,
 } from "./utils";
 
 const errorResult = <T>(error: Error, data: unknown = null): ServiceResult<T> => ({
@@ -27,10 +29,18 @@ export const uploadFile = async (
 ): Promise<ServiceResult> => {
 	const contentWithFrontMatter = await initializeNotionPage(plugin, file);
 
-	const content = await convertObsidianLinks(
+	const { markdown: contentWithImages, skipped } = await uploadLocalImages(
 		plugin,
 		file,
 		contentWithFrontMatter.__content
+	);
+	if (skipped.length)
+		new Notice(`Not uploaded to Notion: ${skipped.join(", ")}`, 8000);
+
+	const content = await convertObsidianLinks(
+		plugin,
+		file,
+		contentWithImages
 	);
 
 	if (contentWithFrontMatter.notionPageId) {
@@ -345,6 +355,106 @@ export const runWithConcurrency = async <T, R>(
 	return results;
 };
 
+const IMAGE_CONTENT_TYPES: Record<string, string> = {
+	png: "image/png",
+	jpg: "image/jpeg",
+	jpeg: "image/jpeg",
+	gif: "image/gif",
+	webp: "image/webp",
+	svg: "image/svg+xml",
+	bmp: "image/bmp",
+	tif: "image/tiff",
+	tiff: "image/tiff",
+	heic: "image/heic",
+};
+
+// Notion's per-file upload limit on the Free plan.
+export const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+const LOCAL_IMAGE_REGEX =
+	/!\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]|!\[([^\]]*)\]\((?:<([^>]+)>|([^)\s]+))(?:\s+"[^"]*")?\)/g;
+
+const safeDecodeURI = (value: string): string => {
+	try {
+		return decodeURI(value);
+	} catch {
+		return value;
+	}
+};
+
+/**
+ * Upload local images (![[img.png]] or ![alt](relative/img.png)) through
+ * Notion's File Upload API and point the markdown at the uploads.
+ *
+ * Remote image URLs and note embeds are left as-is. Images that are missing,
+ * unsupported, over the size limit, or fail to upload become plain text and
+ * are reported in `skipped`.
+ */
+export const uploadLocalImages = async (
+	plugin: NObsidian,
+	sourceFile: TFile,
+	markdown: string
+): Promise<{ markdown: string; skipped: string[] }> => {
+	const skipped: string[] = [];
+	const uploadsByPath = new Map<string, string | null>();
+	let result = "";
+	let lastIndex = 0;
+
+	for (const match of markdown.matchAll(LOCAL_IMAGE_REGEX)) {
+		const index = match.index ?? 0;
+		result += markdown.slice(lastIndex, index);
+		lastIndex = index + match[0].length;
+
+		const isEmbed = match[1] !== undefined;
+		const target = isEmbed
+			? match[1].trim()
+			: safeDecodeURI(match[3] ?? match[4]);
+		const alt = isEmbed ? "" : match[2];
+
+		if (!isEmbed && /^[a-z][a-z0-9+.-]*:/i.test(target)) {
+			result += match[0];
+			continue;
+		}
+
+		const file = plugin.getLinkedMarkdownFile(target, sourceFile.path);
+		if (!file || file.extension === "md") {
+			// Unresolved embeds are left for convertObsidianLinks (plain text).
+			if (!file && !isEmbed) skipped.push(target);
+			result += file || isEmbed ? match[0] : alt || target;
+			continue;
+		}
+
+		const contentType = IMAGE_CONTENT_TYPES[file.extension.toLowerCase()];
+		if (!contentType || file.stat.size > MAX_IMAGE_UPLOAD_BYTES) {
+			skipped.push(file.name);
+			result += alt || file.name;
+			continue;
+		}
+
+		if (!uploadsByPath.has(file.path)) {
+			const data = await plugin.readBinary(file);
+			const upload = await notion.uploadImage(
+				plugin.settings,
+				file.name,
+				contentType,
+				data
+			);
+			uploadsByPath.set(file.path, upload.error ? null : upload.data);
+		}
+
+		const fileUploadId = uploadsByPath.get(file.path);
+		if (!fileUploadId) {
+			skipped.push(file.name);
+			result += alt || file.name;
+			continue;
+		}
+
+		result += `![${alt}](${createFileUploadImageUrl(fileUploadId)})`;
+	}
+
+	return { markdown: result + markdown.slice(lastIndex), skipped };
+};
+
 /**
  * Convert Obsidian wiki-link into a Notion page mention marker.
  *
@@ -360,34 +470,35 @@ export const convertObsidianLinks = async (
 	sourceFile: TFile,
 	markdown: string
 ): Promise<string> => {
-	const links = getWikiLinksFromMarkdown(markdown);
-	let updatedMarkdown = markdown;
+	// Note embeds (![[Other note]]) become plain links; local images were
+	// already handled by uploadLocalImages.
+	let updatedMarkdown = markdown.replace(/!\[\[/g, "[[");
+	const links = getWikiLinksFromMarkdown(updatedMarkdown);
 
 	for (const link of links) {
-		let file = plugin.getLinkedMarkdownFile(
+		// Only mention notes that were already pushed. Never create vault files
+		// or Notion pages for linked notes: they may not be meant for sharing.
+		const file = plugin.getLinkedMarkdownFile(
 			link.pageName,
 			sourceFile.path
 		);
+		const notionPageId =
+			file?.extension === "md"
+				? (await plugin.getContent(file)).notionPageId
+				: undefined;
 
-		// if file doesn't exist, create it
-		if (!file) file = await plugin.createEmptyMarkdownFile(link.pageName);
-		if (!file) continue;
-
-		// If file exists but doesn't have a corresponding notion page
-		// create an empty notion page
-		const contentWithFrontMatter = await initializeNotionPage(
-			plugin,
-			file
-		);
-		const notionPageId = contentWithFrontMatter.notionPageId;
-
-		if (notionPageId)
-			updatedMarkdown = replaceWikiWithHyperLink(
-				updatedMarkdown,
-				link.rawLink,
-				link.displayName,
-				createNotionPageMentionUrl(notionPageId)
-			);
+		updatedMarkdown = notionPageId
+			? replaceWikiWithHyperLink(
+					updatedMarkdown,
+					link.rawLink,
+					link.displayName,
+					createNotionPageMentionUrl(notionPageId)
+			  )
+			: replaceWikiWithText(
+					updatedMarkdown,
+					link.rawLink,
+					link.displayName
+			  );
 	}
 
 	return updatedMarkdown;

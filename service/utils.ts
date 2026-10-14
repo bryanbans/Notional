@@ -26,6 +26,10 @@ import { MarkdownWithFrontMatter } from "./types";
 
 const NOTION_PAGE_MENTION_URL_PREFIX = "notional://notion-page/";
 
+// Personal fork: only Obsidian -> Notion pushes. Pull, two-way sync, folder
+// upload and auto-sync are disabled so Notion can never overwrite the vault.
+export const PUSH_ONLY = true;
+
 export type WikiLink = {
 	rawLink: string;
 	pageName: string;
@@ -138,6 +142,38 @@ export const replaceWikiWithHyperLink = (
 			"g"
 		),
 		`[${hyperLinkName}](${hyperlink})`
+	);
+};
+
+export const replaceWikiWithText = (
+	markdown: string,
+	wikiName: string,
+	text: string
+) => {
+	return markdown.replace(
+		new RegExp(
+			`\\[\\[${wikiName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\]\\]`,
+			"g"
+		),
+		() => text
+	);
+};
+
+// Marker for an image that was sent through Notion's File Upload API. It ends
+// in ".png" so Martian (strictImageUrls) keeps it as an image block;
+// service/notion.ts swaps it for a file_upload image before appending.
+const FILE_UPLOAD_IMAGE_URL_PREFIX = "https://notional.invalid/file-upload/";
+
+export const createFileUploadImageUrl = (fileUploadId: string): string => {
+	return `${FILE_UPLOAD_IMAGE_URL_PREFIX}${encodeURIComponent(fileUploadId)}.png`;
+};
+
+export const getFileUploadImageId = (url: string): string | null => {
+	if (!url.startsWith(FILE_UPLOAD_IMAGE_URL_PREFIX) || !url.endsWith(".png"))
+		return null;
+
+	return decodeURIComponent(
+		url.slice(FILE_UPLOAD_IMAGE_URL_PREFIX.length, -".png".length)
 	);
 };
 

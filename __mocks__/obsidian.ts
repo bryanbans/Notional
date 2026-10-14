@@ -1,11 +1,17 @@
 export class TFile {
 	basename: string;
+	name: string;
 	path: string;
 	extension: string;
 	parent: TFolder | null = null;
 	stat = {
 		mtime: 0,
+		size: 0,
 	};
+}
+
+export class Notice {
+	constructor(public message: string, public timeout?: number) {}
 }
 
 export class TFolder {

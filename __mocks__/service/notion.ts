@@ -6,4 +6,5 @@ export default {
 	retrievePage: jest.fn(),
 	retrievePageMarkdown: jest.fn(),
 	uploadFileContent: jest.fn(),
+	uploadImage: jest.fn(),
 };

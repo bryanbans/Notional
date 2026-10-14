@@ -22,6 +22,7 @@ import {
 	uploadFile,
 } from "service";
 import { ServiceResult, SyncStatus } from "service/types";
+import { PUSH_ONLY } from "service/utils";
 
 export const VIEW_TYPE_SYNC = "notional-sync-view";
 
@@ -317,6 +318,7 @@ export class SyncView extends ItemView {
 					uploadFile(this.plugin, file)
 				)
 			);
+		if (PUSH_ONLY) return;
 		new ButtonComponent(buttons)
 			.setButtonText("Keep Notion → local")
 			.setClass("mod-warning")
@@ -330,6 +332,20 @@ export class SyncView extends ItemView {
 
 	private renderActions(section: HTMLElement): void {
 		const actions = section.createDiv({ cls: "nob-actions" });
+
+		if (PUSH_ONLY) {
+			new ButtonComponent(actions)
+				.setButtonText(this.busy ? "Working…" : "Push")
+				.setClass("mod-cta")
+				.setTooltip("Overwrite the Notion page with this note")
+				.setDisabled(this.busy)
+				.onClick(() =>
+					this.runAction("Pushed", (file) =>
+						uploadFile(this.plugin, file)
+					)
+				);
+			return;
+		}
 
 		new ButtonComponent(actions)
 			.setButtonText(this.busy ? "Working…" : "Sync")
